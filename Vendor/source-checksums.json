@@ -1,0 +1,366 @@
+[
+  {
+    "path": "Vendor/argmax-oss-swift/LICENSE",
+    "sha256": "b8673adf319f1d6905c5c38cf69513f8857930fb3445566fa9839c6948bb85c4"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/NOTICES",
+    "sha256": "8af554e910833382a04c73b2d9eaef669e031335c867de14b5cf631bd2239913"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Package.swift",
+    "sha256": "c1934b244b3399b92c614d6d5b0dc1262d3606fffaa0e4c2de9f50d3b9bc3ad0"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Package.upstream.swift",
+    "sha256": "bc0c8a1939fb7274ecb0b3db1909ab6b93235b4d161355f702fe9d2ca2b5d553"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ArgmaxCoreError.swift",
+    "sha256": "bf32748eb7a0e1757fb08f9abfad06d3663928713384dde91e43444b5028e1e4"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/AutoTokenizerWrapper.swift",
+    "sha256": "e80a9cea3fa2b9bae03e321e467f7395682e2031dc8abddccb38cb1e70e37552"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ConcurrencyUtilities.swift",
+    "sha256": "cef4fd056354eed142c49b4378323176a4b4caa59697fb3144e292ec101cc83e"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/BinaryDistinct.swift",
+    "sha256": "2e016f66f3c0654878f6704acd24e19d5f23a23e5ddf57f54d649ab4eb69a0ff"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/Config.swift",
+    "sha256": "c28671374e71c44b532f6681c64aa61c275201759f6c92c252bf686ae517f92f"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/Downloader.swift",
+    "sha256": "46f633089d75bdc0f5f7e64603d9fa0896fd0157bddade167dde0d8cabe72b3c"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/Extensions/JSONSerialization+BOM.swift",
+    "sha256": "7a55d01da35679cd4e3410d021ea2ec5c0aad98750b8c7e862bb3983398b1a0e"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/Hub.swift",
+    "sha256": "9b08b88f3e22d0e692d2b890fbf14bf027dc7c9d1a66c6de1c383e60fb5e6693"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Hub/HubApi.swift",
+    "sha256": "407a3d80e71eac236b0dc52f531bdaad0b226829b2408020b7779239b4e52a5e"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/BPETokenizer.swift",
+    "sha256": "b5818cd0ad8aca3dff9051ddfd5709bb4ffedb44d73af6ccbe6125b1986f2d68"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/BertTokenizer.swift",
+    "sha256": "18bb2b4ba391cf6395dee14021bcdfead4ace10e47861e4a7ee41aebfc8f07ac"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/ByteEncoder.swift",
+    "sha256": "d142d36f1843be7a5819e73869f0ba3a2b3411bbc002507841bd8edd2ef3c6eb"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/Decoder.swift",
+    "sha256": "7d6ebd47a7e2acb5606e649e04fbdb9d43e5cad1f7b75b97b411eed6953752d7"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/Normalizer.swift",
+    "sha256": "6f563227b8d0c93803b8a4a847231c5fe69d55619482b950559537dc18cd0ef2"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/PostProcessor.swift",
+    "sha256": "5be71fa9e1ff21956ef86abc70a6f4d77b1d587957a6aaf6b7d9bbe7be1eed76"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/PreTokenizer.swift",
+    "sha256": "5d703ed065b1223c217bde02209306ef5e4be6a418f36d528540c7643c22b3b6"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/String+PreTokenization.swift",
+    "sha256": "fd822afcc6ad4dd366a0768b7eefa46cd650c4e52900d48c9a21986cbf01bb99"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/TokenLattice.swift",
+    "sha256": "a36f41e220cbf6503911482c04a6a186baeb2ed7f4bfa977faaed09bcfdf1873"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/Tokenizer.swift",
+    "sha256": "86739e03beaa5d1282e0a5963824e95a0b9eeaedbdcf668f3197dbefd03e7ec3"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/Trie.swift",
+    "sha256": "de02655c088b3c69c4e63b662a925d89543ada824445cfed552d23357c545dd2"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/UnigramTokenizer.swift",
+    "sha256": "80637550f51b0bd76e927474fbc13421d5631a5ea5f8d84ec8241b3a32885c45"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/External/Tokenizers/Utils.swift",
+    "sha256": "e73e5d6356b5e3d8791182f5b97a5c300f7c77795505a456a23aa048813bad34"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/FloatType.swift",
+    "sha256": "0c036e144321f5b7c595ab8fbfbc1cee1ea6cfa77c2a1828456167e9fde0eb3d"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/FoundationExtensions.swift",
+    "sha256": "05ff34cb6dc7eecb44d2fb2e82a00c8b53b54132702ab954738f47bc25e70cd9"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/HubWrapper.swift",
+    "sha256": "1814360038643f812ef07b3f551725f5183fe2c5603716f250baa6de690bdd5a"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/Logging.swift",
+    "sha256": "daec63324281a858de777382701b6c46ccbf37f5de6721ebc62a85444109fab2"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/MLModelExtensions.swift",
+    "sha256": "327503fc05366fb35f136c834b960b73fb52b309b0131a06ff05fa1d4f3502e3"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/MLModelLoading.swift",
+    "sha256": "9c730e51c95125258fac4f0477627dcf02e750fe9cee2fbdbf3d020d1ea7b45e"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/MLMultiArrayExtensions.swift",
+    "sha256": "662f0d7d59180a59596fca53ae4e95835e428ec6d182416c0aa7e8533edc3cda"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/MLTensorExtensions.swift",
+    "sha256": "32d8fd2d626de6003ce7aff63811f1d8bb8d882052292111bbb1e99300ddd4a4"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ModelDownloader.swift",
+    "sha256": "8f22c30028b606940468a8ba07d3af27ae57471ae6f8d11a04f50f0aec55f7ab"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ModelManager.swift",
+    "sha256": "b62f32c9118b37d1543f0d6aab41a9e1b5f22e4c0269618c4a571fadf23e45e6"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ModelState.swift",
+    "sha256": "99055c400119366c9771aa09cc5fe00b1123a14847102b8a7206bf89fadb67e7"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/ModelUtilities.swift",
+    "sha256": "137c08f737871f3d7574e27f074cef3d067d2cacd654a71e2cb39b56ec3a9f31"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/ArgmaxCore/TokenizerWrapper.swift",
+    "sha256": "3668179456b2c07cffa3eed0052bd076183dce89cb5bca0755242bdd2803c34a"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/AudioChunker.swift",
+    "sha256": "32cc94c2dd0377c6d470e84823585959c1b4ca43f32f7538e12257950ee6cadf"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/AudioProcessor+IncrementalLoading.swift",
+    "sha256": "2b6dc71869f0c329fe66bbc80f5903cae7280f29c8cef724e66c109da5103dda"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/AudioProcessor.swift",
+    "sha256": "8b652bade79b2102d3f3c35898f9d2c8bbb8de68fa5329262accf217f6331eb5"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/AudioStreamTranscriber.swift",
+    "sha256": "39d5cd1145bf74ab2d288299bb48f6817c1e0f971179f8ccd3faa7df8fb8cc50"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/EnergyVAD.swift",
+    "sha256": "3782536fe1f35a63f6b80437fff45d8eb3d4cb8ecad8beb1d3f7d7b4d5dc09c3"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Audio/VoiceActivityDetector.swift",
+    "sha256": "b896fdd258e1906ce7ffbe35c39331b5ddcded66420b31e89876c3f42ba3eabd"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/AudioEncoder.swift",
+    "sha256": "3d32e9b90f9223b01fcdccceda6f55f2b6972d6629331738cdc5dcdb0ebe5a91"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Configurations.swift",
+    "sha256": "0ecbd0c76630a30c0d848106f8fc56eb5c5803fe0c74130380a26478df36c475"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/FeatureExtractor.swift",
+    "sha256": "6d9ac7bbe600ddf7d9f42d555e78c82744e82a4160d6a55223e21e23fe979c9b"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Models.swift",
+    "sha256": "b54433512070700c0e2ae48357d4cfc00a005f6e2a769f11b518cf4e0d374214"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Text/LogitsFilter.swift",
+    "sha256": "1af34fb35d70bf160e5b9332ace3e80cf21063508a1fd36f301faf118706cc59"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Text/SegmentSeeker.swift",
+    "sha256": "918d3ce1a7084ee798ecb51af862fb8c40a61ff354fa978ea69fc33a3fac7744"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/Text/TokenSampler.swift",
+    "sha256": "041d2cd4bca606178247b595928155f3c8f8cb07e16c85589bd82dbcccd5a27f"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/TextDecoder.swift",
+    "sha256": "020cd4f29c14d77369b642a4a0ac200fcc926cb9f06f7bf87528de229b64c107"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/TranscribeTask.swift",
+    "sha256": "87e031820c3e51dc57730b9271121e17f4585eece5933e0d1a73fc21104464d7"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Core/WhisperKit.swift",
+    "sha256": "d5b23709ce8474b9a7746d94b363a8adaa9759ed84bb34a19a6c364ce83eafc1"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/Concurrency.swift",
+    "sha256": "bbcd7708cd6d75a1c5756d89e6d8ea922b2481424bfac9899b8b4f9bdb13f175"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/Extensions+Internal.swift",
+    "sha256": "0c06ed481469d5b5f975118a3b06b538f4caca2430d28fa876aaa0c15988f8c0"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/Extensions+Public.swift",
+    "sha256": "81eac62ac8eba592411cf7ac8d4ad38e09c6a397bd3a3fbae1baebeb35c2cbbd"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/Logging.swift",
+    "sha256": "8bedbef7360946ce715198735926a55d6445dfc81a9a0a7e9adbfb00bd79b167"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/ModelUtilities.swift",
+    "sha256": "71c6bce861ca8a499bae425a29f536968001a98460c2edd29492ffbbaad9bf53"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/ResultWriter.swift",
+    "sha256": "9ed482a0d2cd666b6cd05de86aee10480119b62548fb7f779244c92c165e81fa"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/TextUtilities.swift",
+    "sha256": "01d03c8b2e649a4901687064bfcfd100f98859fa22a584de4df84dc97b180725"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/TranscriptionUtilities.swift",
+    "sha256": "db5656871220103327f14b6b537b34b79ca5bcaa200afd95207dce135a9f65b5"
+  },
+  {
+    "path": "Vendor/argmax-oss-swift/Sources/WhisperKit/Utilities/WhisperError.swift",
+    "sha256": "845ab0dd1a0f12b1310115f9084db71333adbca07d68ff0f2e673db1532c36b8"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/LICENSE",
+    "sha256": "93a5b6f4c4fcfbca71aaf17f5758d249cf205d5d1c237becc37f14e43af09f6b"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Package.swift",
+    "sha256": "e3480cb9f6a92127b8f11ab6e19c4bbd72731f4f35c44d8970b84437a6e893f2"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Package.upstream.swift",
+    "sha256": "2dd90c2f70b1f3d17a4d73bd32ac97e5fc002eecd5797586edaf170def789fff"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/CZLib/module.modulemap",
+    "sha256": "1d6577e0f4ac0ce32cd158f426e0a337a777e8e1722bd51330514b98877a200f"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/CZLib/shim.h",
+    "sha256": "1d3b804c8ff494bbd1305ddd5e3290e24397694b1d241bc43efa98cce4e66cb2"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+BackingConfiguration.swift",
+    "sha256": "d9ebf96a0080d2b79207f85bcd3e46812baa94e35d35ea66114153fd4dc5f49d"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+Deprecated.swift",
+    "sha256": "1824adfa6e318fcdcc5c43431633ed42c4de845f3d8575807b24bc626addc63e"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+Helpers.swift",
+    "sha256": "2b660b56fcdc8a57de59b6ae0527894dfe2cd895a5037795f827763ea56be6c8"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+MemoryFile.swift",
+    "sha256": "c480fa8e999604787bebfba3ae5eb9e0dea0b8bced7063c93f853f252d4828a7"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+Progress.swift",
+    "sha256": "c8b26546f4183d127bb5fca7612cb87b18253d4a1788cbc0dd222280e7e1b9bf"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+Reading.swift",
+    "sha256": "14f4c1c9ffbe45fb4618625be15105507010110680e7e4a90c9061e222ec8b03"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+ReadingDeprecated.swift",
+    "sha256": "a5036f209dc6609c17adf64cdd1682cd6fc319f405e709a147cea087172a6dfe"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+Writing.swift",
+    "sha256": "6081d702339396741e85e0b430f66b5f3c4443e2e13164e69758857429fd5996"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+WritingDeprecated.swift",
+    "sha256": "2f2046af246e02648db773e3e36133a96e7ab4a72942f39a87e6e29ddf51310b"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive+ZIP64.swift",
+    "sha256": "21465808aa72245ecf5e1c69231d187a133d0a86f180148828de86431fce424a"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Archive.swift",
+    "sha256": "a36fb6c28dc61665003d0de996eeeccf3ddd829c1c5a3ff0a375ec86a302e912"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Data+Compression.swift",
+    "sha256": "88c2b802cc903d48987cd3808cd9212226e889948c76f0790a01572bdaab1d2d"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Data+CompressionDeprecated.swift",
+    "sha256": "b76157d54942ae30f9e6b3a460222725602e6f60cdf8f51020d511e04674347a"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Data+Serialization.swift",
+    "sha256": "0582aa3a7f58bf20b214eabfd6f7c41b78684780b5dbea663e09025d829bbd82"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Date+ZIP.swift",
+    "sha256": "88edc8e6b839309df32f03b5a387cff4ba3f5151be4cf154b33810d7e235d02f"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Entry+Serialization.swift",
+    "sha256": "31b5f2a1b9e91b9f4dd0ee3dedefaa3f3b0efafb96e6d3815a6b3c2dbd34c87f"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Entry+ZIP64.swift",
+    "sha256": "ec1664c6ad88acb387344fe8faf3159641476feb99c75a5d47e1a11bc81636dd"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Entry.swift",
+    "sha256": "d6f5570877afa147db0235479d4bdf18c7489af79fcbb20f022d0eee2bc42212"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/FileManager+ZIP.swift",
+    "sha256": "e299de3ad3615a315ee033169fbbb965bab8f0256f36b7acd101f71ce9b947e4"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/FileManager+ZIPDeprecated.swift",
+    "sha256": "dbc4082819be0af06e942396152d584e010740b798da2ead51117e3094fbcd4e"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/Resources/PrivacyInfo.xcprivacy",
+    "sha256": "9a2f930cedb8d58309a581b9bf9bf3673685ec02ae2197d9f1c56828b718dffd"
+  },
+  {
+    "path": "Vendor/ZIPFoundation/Sources/ZIPFoundation/URL+ZIP.swift",
+    "sha256": "89f4a8cb15a21ac1cb55d0c5f251546d254abe8a7f4aab0645a4470e57052206"
+  }
+]

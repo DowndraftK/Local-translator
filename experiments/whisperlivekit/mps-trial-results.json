@@ -1,0 +1,498 @@
+{
+  "experiment_date": "2026-09-15",
+  "report_date": "2026-09-16",
+  "scope": "Real large-v3-turbo, paced in-process WLK AudioProcessor PCM; no WebSocket, microphone, translation, or Swift app integration",
+  "hardware": "Apple M5 Pro, 20 GPU cores (prior system_profiler record)",
+  "upstream_commit": "363e4f6d029694d9c81ae548beddd9d3c88a3637",
+  "patched_files": {
+    "whisperlivekit/config.py": "698cfb5c3bc7f09e00e73ca2e4eb8188cafee190d28596e8df27db2af94968cb",
+    "whisperlivekit/parse_args.py": "14ba37efe7af6dec0e38af77f07f2c033d204be2cd6a59c0480becbe42077980",
+    "whisperlivekit/core.py": "c684344e482f4236f110bd2c5c545c2b34bf309cd39115a2b975a9cf1d00d7d7",
+    "whisperlivekit/simul_whisper/backend.py": "054354261b1d70c220766c7a968d233eeb012eb21a162fb1820af0cfaf295395",
+    "whisperlivekit/simul_whisper/simul_whisper.py": "d98b7ce894f0fd99ccf988e0dd0ea7561614bea11d0cbf656dd2de52ec05633e"
+  },
+  "patch_sha256": "f0f4941abd5ae2318d2a20a5bcff7b88dc676d26f6751e535d9fa9afc12d0eae",
+  "model_manifest": {
+    "repo": "mlx-community/whisper-large-v3-turbo",
+    "revision": "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
+    "files": {
+      "weights.safetensors": {
+        "size": 1613977612,
+        "sha256": "951ed3fc1203e6a62467abb2144a96ce7eafca8fa77e3704fdb8635ff3e7f8a6"
+      },
+      "config.json": {
+        "size": 268,
+        "sha256": "b34fc29e4e11e0a25e812775dd67f4dd16fc2c8eb43d28ae25ff7d660ecb6379"
+      }
+    }
+  },
+  "fixture_reference": {
+    "path": "fixtures/translation-en.txt",
+    "sha256": "08073271f2246b64bd6e5da3389b8342137087889e6a490a94a615ccc1c3afd6",
+    "words": 69
+  },
+  "comparison_normalization": "Lowercase, punctuation ignored via word tokenization, three -> 3; differences are fixture checks, not a corpus WER benchmark",
+  "measurement_notes": [
+    "The audio clock starts after model load and a 3-second warmup; 0.5-second PCM packets are paced in real time.",
+    "First committed text is the single word Students, not a complete English or bilingual sentence.",
+    "Accumulated ASR call duration includes encoding, feature conversion, decoding, alignment, and executor dispatch; it is not isolated decoder GPU time.",
+    "Input coalescing varies with runtime; run order, caches, and kernel compilation were not controlled.",
+    "MPS FP32 repeat approaches the CPU decoder baseline but shows no speed improvement in this short sample.",
+    "The initial FP32 run has no recorded power state. Later trials record AC power; no power consumption or memory profiling was performed.",
+    "The pause trial has a 0.22-second overlap between estimated silence end and second speech start; timestamp accuracy is not established."
+  ],
+  "configuration_tests": {
+    "passed": 6,
+    "junit_path": "artifacts/whisperlivekit-mps-20260915/config-tests.xml",
+    "junit_sha256": "19d021cc5e5f4a8aa61461e4f13203cf3d4ef93c7436260bdffd8782f3e84223"
+  },
+  "runs": [
+    {
+      "name": "mps-fp32-paced",
+      "raw_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-paced.json",
+      "raw_sha256": "e048df061652d6704a7e8968d70dbab9f0d509f9030af837d79636231d0be6e7",
+      "updates_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-paced.updates.jsonl",
+      "updates_sha256": "5ed7c64fdaa610b052d5ad1889623205118916ffbe4c179479ac3c5027e6bc23",
+      "audio_path": "artifacts/smoke-20260914-131929-22067/synthetic-english.aiff",
+      "audio_sha256": "5a67b0d6251cbb80f69ad09d98a3833ee7f89a4d37cbb906660e2091c2fa7ac7",
+      "audio_seconds": 26.1130625,
+      "input_samples": 417809,
+      "received_pcm_samples": 417809,
+      "load_and_warmup_seconds": 7.4477307499983,
+      "first_committed_text_seconds": 1.3283345829986501,
+      "elapsed_seconds": 27.751231250000274,
+      "tail_finalize_seconds": 1.636485792001622,
+      "device_evidence": {
+        "encoder_backend": "mlx-whisper",
+        "decoder_parameter_devices": [
+          "mps:0"
+        ],
+        "decoder_parameter_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "mps:0",
+        "uses_full_mlx_decoder": false,
+        "encoder_parameter_dtype": "mlx.core.float16",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoded_feature_device": "mps:0",
+        "encoded_feature_dtype": "torch.float32"
+      },
+      "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The course is worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+      "versions": {
+        "python": "3.12.14",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "decoder_device": "mps",
+      "decoder_dtype": "float32",
+      "first_committed_text": "Students",
+      "total_asr_call_seconds": 25.71286874701036,
+      "asr_call_seconds_per_audio_second": 0.9846745760674513,
+      "n_transcription_calls": 41,
+      "queue_peak_seconds": 1.458,
+      "checks": {
+        "completed": true,
+        "all_pcm_samples_received": true,
+        "no_pipeline_error": true,
+        "empty_transcription_tail": true,
+        "committed_text_present": true,
+        "first_commit_matches_update_log": true,
+        "automatic_mps_fallback_disabled": true,
+        "mlx_encoder_gpu": true,
+        "pytorch_decoder_selected": true,
+        "decoder_device_matches": true,
+        "decoder_dtype_matches": true,
+        "feature_device_matches": true,
+        "feature_dtype_matches": true,
+        "expected_phrase_repetition_counts": true
+      },
+      "phrase_counts": {
+        "Students must submit": 1,
+        "at least 14 days": 1,
+        "causal relationship": 1
+      },
+      "normalized_reference_match": true,
+      "normalized_word_differences": [],
+      "final_lines": [
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The course is worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:00.14",
+          "end": "0:00:25.42",
+          "detected_language": "en"
+        }
+      ],
+      "power_before": null,
+      "power_after": null
+    },
+    {
+      "name": "mps-fp16-paced",
+      "raw_path": "artifacts/whisperlivekit-mps-20260915/mps-fp16-paced.json",
+      "raw_sha256": "e13dce3b531022faa7f22d6927487994435eeb81929925095fa7e0bdbd19dce2",
+      "updates_path": "artifacts/whisperlivekit-mps-20260915/mps-fp16-paced.updates.jsonl",
+      "updates_sha256": "3491752833171cae395953618e930f1883d33bb21d764ff76c2ac8d63800d106",
+      "audio_path": "artifacts/smoke-20260914-131929-22067/synthetic-english.aiff",
+      "audio_sha256": "5a67b0d6251cbb80f69ad09d98a3833ee7f89a4d37cbb906660e2091c2fa7ac7",
+      "audio_seconds": 26.1130625,
+      "input_samples": 417809,
+      "received_pcm_samples": 417809,
+      "load_and_warmup_seconds": 3.0175985419991775,
+      "first_committed_text_seconds": 1.327312167002674,
+      "elapsed_seconds": 27.151402958999824,
+      "tail_finalize_seconds": 1.0357649170000514,
+      "device_evidence": {
+        "encoder_backend": "mlx-whisper",
+        "decoder_parameter_devices": [
+          "mps:0"
+        ],
+        "decoder_parameter_dtypes": [
+          "torch.float16"
+        ],
+        "alignatt_device": "mps:0",
+        "uses_full_mlx_decoder": false,
+        "encoder_parameter_dtype": "mlx.core.float16",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoded_feature_device": "mps:0",
+        "encoded_feature_dtype": "torch.float16"
+      },
+      "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+      "versions": {
+        "python": "3.12.14",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "decoder_device": "mps",
+      "decoder_dtype": "float16",
+      "first_committed_text": "Students",
+      "total_asr_call_seconds": 22.55080938001265,
+      "asr_call_seconds_per_audio_second": 0.8635834797244731,
+      "n_transcription_calls": 51,
+      "queue_peak_seconds": 1.322,
+      "checks": {
+        "completed": true,
+        "all_pcm_samples_received": true,
+        "no_pipeline_error": true,
+        "empty_transcription_tail": true,
+        "committed_text_present": true,
+        "first_commit_matches_update_log": true,
+        "automatic_mps_fallback_disabled": true,
+        "mlx_encoder_gpu": true,
+        "pytorch_decoder_selected": true,
+        "decoder_device_matches": true,
+        "decoder_dtype_matches": true,
+        "feature_device_matches": true,
+        "feature_dtype_matches": true,
+        "expected_phrase_repetition_counts": true
+      },
+      "phrase_counts": {
+        "Students must submit": 1,
+        "at least 14 days": 1,
+        "causal relationship": 1
+      },
+      "normalized_reference_match": false,
+      "normalized_word_differences": [
+        {
+          "operation": "replace",
+          "reference": [
+            "course",
+            "is"
+          ],
+          "recognized": [
+            "courses"
+          ]
+        }
+      ],
+      "final_lines": [
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:00.14",
+          "end": "0:00:25.42",
+          "detected_language": "en"
+        }
+      ],
+      "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n",
+      "power_after": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n"
+    },
+    {
+      "name": "cpu-fp32-paced",
+      "raw_path": "artifacts/whisperlivekit-mps-20260915/cpu-fp32-paced.json",
+      "raw_sha256": "fb15c9600a1a61e22e1cfdf580842c6e8a22b478fe1c50928f5a90cecd935a47",
+      "updates_path": "artifacts/whisperlivekit-mps-20260915/cpu-fp32-paced.updates.jsonl",
+      "updates_sha256": "d07f2bdefba603ee69ba04c0f0cebed5b6aa3dabfaeba4eeba7cacd5f8c77878",
+      "audio_path": "artifacts/smoke-20260914-131929-22067/synthetic-english.aiff",
+      "audio_sha256": "5a67b0d6251cbb80f69ad09d98a3833ee7f89a4d37cbb906660e2091c2fa7ac7",
+      "audio_seconds": 26.1130625,
+      "input_samples": 417809,
+      "received_pcm_samples": 417809,
+      "load_and_warmup_seconds": 1.32518116600113,
+      "first_committed_text_seconds": 1.3805270830016525,
+      "elapsed_seconds": 27.01807083300082,
+      "tail_finalize_seconds": 0.9016726250010834,
+      "device_evidence": {
+        "encoder_backend": "mlx-whisper",
+        "decoder_parameter_devices": [
+          "cpu"
+        ],
+        "decoder_parameter_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "cpu",
+        "uses_full_mlx_decoder": false,
+        "encoder_parameter_dtype": "mlx.core.float16",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoded_feature_device": "cpu",
+        "encoded_feature_dtype": "torch.float32"
+      },
+      "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+      "versions": {
+        "python": "3.12.14",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "decoder_device": "cpu",
+      "decoder_dtype": "float32",
+      "first_committed_text": "Students",
+      "total_asr_call_seconds": 18.335554246990796,
+      "asr_call_seconds_per_audio_second": 0.7021602405689028,
+      "n_transcription_calls": 56,
+      "queue_peak_seconds": 0.822,
+      "checks": {
+        "completed": true,
+        "all_pcm_samples_received": true,
+        "no_pipeline_error": true,
+        "empty_transcription_tail": true,
+        "committed_text_present": true,
+        "first_commit_matches_update_log": true,
+        "automatic_mps_fallback_disabled": true,
+        "mlx_encoder_gpu": true,
+        "pytorch_decoder_selected": true,
+        "decoder_device_matches": true,
+        "decoder_dtype_matches": true,
+        "feature_device_matches": true,
+        "feature_dtype_matches": true,
+        "expected_phrase_repetition_counts": true
+      },
+      "phrase_counts": {
+        "Students must submit": 1,
+        "at least 14 days": 1,
+        "causal relationship": 1
+      },
+      "normalized_reference_match": false,
+      "normalized_word_differences": [
+        {
+          "operation": "replace",
+          "reference": [
+            "course",
+            "is"
+          ],
+          "recognized": [
+            "courses"
+          ]
+        }
+      ],
+      "final_lines": [
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:00.14",
+          "end": "0:00:25.42",
+          "detected_language": "en"
+        }
+      ],
+      "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n",
+      "power_after": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n"
+    },
+    {
+      "name": "mps-fp32-paced-repeat",
+      "raw_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-paced-repeat.json",
+      "raw_sha256": "ee859e420742d3f911a02e27028df7582e4a0f3068eb3e3288d13eea33c0875c",
+      "updates_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-paced-repeat.updates.jsonl",
+      "updates_sha256": "8e30cee510d89c3c763010773c520cfcab4876675614689b7ad7f455c8e7dc4a",
+      "audio_path": "artifacts/smoke-20260914-131929-22067/synthetic-english.aiff",
+      "audio_sha256": "5a67b0d6251cbb80f69ad09d98a3833ee7f89a4d37cbb906660e2091c2fa7ac7",
+      "audio_seconds": 26.1130625,
+      "input_samples": 417809,
+      "received_pcm_samples": 417809,
+      "load_and_warmup_seconds": 1.711618167002598,
+      "first_committed_text_seconds": 1.3481850829994073,
+      "elapsed_seconds": 27.029909624998254,
+      "tail_finalize_seconds": 0.9136840840001241,
+      "device_evidence": {
+        "encoder_backend": "mlx-whisper",
+        "decoder_parameter_devices": [
+          "mps:0"
+        ],
+        "decoder_parameter_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "mps:0",
+        "uses_full_mlx_decoder": false,
+        "encoder_parameter_dtype": "mlx.core.float16",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoded_feature_device": "mps:0",
+        "encoded_feature_dtype": "torch.float32"
+      },
+      "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+      "versions": {
+        "python": "3.12.14",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "decoder_device": "mps",
+      "decoder_dtype": "float32",
+      "first_committed_text": "Students",
+      "total_asr_call_seconds": 19.19023383198146,
+      "asr_call_seconds_per_audio_second": 0.734890204164351,
+      "n_transcription_calls": 56,
+      "queue_peak_seconds": 0.822,
+      "checks": {
+        "completed": true,
+        "all_pcm_samples_received": true,
+        "no_pipeline_error": true,
+        "empty_transcription_tail": true,
+        "committed_text_present": true,
+        "first_commit_matches_update_log": true,
+        "automatic_mps_fallback_disabled": true,
+        "mlx_encoder_gpu": true,
+        "pytorch_decoder_selected": true,
+        "decoder_device_matches": true,
+        "decoder_dtype_matches": true,
+        "feature_device_matches": true,
+        "feature_dtype_matches": true,
+        "expected_phrase_repetition_counts": true
+      },
+      "phrase_counts": {
+        "Students must submit": 1,
+        "at least 14 days": 1,
+        "causal relationship": 1
+      },
+      "normalized_reference_match": false,
+      "normalized_word_differences": [
+        {
+          "operation": "replace",
+          "reference": [
+            "course",
+            "is"
+          ],
+          "recognized": [
+            "courses"
+          ]
+        }
+      ],
+      "final_lines": [
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:00.14",
+          "end": "0:00:25.42",
+          "detected_language": "en"
+        }
+      ],
+      "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n",
+      "power_after": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n"
+    },
+    {
+      "name": "mps-fp32-pause-repeat",
+      "raw_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-pause-repeat.json",
+      "raw_sha256": "27c71b7c6d64ff94752958a21abdb7f2e2764cd862d4a75f73249817e75fb5c0",
+      "updates_path": "artifacts/whisperlivekit-mps-20260915/mps-fp32-pause-repeat.updates.jsonl",
+      "updates_sha256": "10fa3cbb7effc0fb7d1deda94c0ae49df697cb75b9486467e085a32f0b2e0eda",
+      "audio_path": "artifacts/whisperlivekit-mps-20260915/repeated-after-pause.wav",
+      "audio_sha256": "8a94ea2e739b3517ee0454bef48b3fa1633ee1674c7094baf22f21637cae79ff",
+      "audio_seconds": 58.2260625,
+      "input_samples": 931617,
+      "received_pcm_samples": 931617,
+      "load_and_warmup_seconds": 1.7147531250011525,
+      "first_committed_text_seconds": 1.3513301249986398,
+      "elapsed_seconds": 59.02558479199797,
+      "tail_finalize_seconds": 0.7957423749976442,
+      "device_evidence": {
+        "encoder_backend": "mlx-whisper",
+        "decoder_parameter_devices": [
+          "mps:0"
+        ],
+        "decoder_parameter_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "mps:0",
+        "uses_full_mlx_decoder": false,
+        "encoder_parameter_dtype": "mlx.core.float16",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoded_feature_device": "mps:0",
+        "encoded_feature_dtype": "torch.float32"
+      },
+      "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship  Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The course is worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+      "versions": {
+        "python": "3.12.14",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "decoder_device": "mps",
+      "decoder_dtype": "float32",
+      "first_committed_text": "Students",
+      "total_asr_call_seconds": 38.5831950430038,
+      "asr_call_seconds_per_audio_second": 0.6626447571137718,
+      "n_transcription_calls": 114,
+      "queue_peak_seconds": 0.822,
+      "checks": {
+        "completed": true,
+        "all_pcm_samples_received": true,
+        "no_pipeline_error": true,
+        "empty_transcription_tail": true,
+        "committed_text_present": true,
+        "first_commit_matches_update_log": true,
+        "automatic_mps_fallback_disabled": true,
+        "mlx_encoder_gpu": true,
+        "pytorch_decoder_selected": true,
+        "decoder_device_matches": true,
+        "decoder_dtype_matches": true,
+        "feature_device_matches": true,
+        "feature_dtype_matches": true,
+        "expected_phrase_repetition_counts": true
+      },
+      "phrase_counts": {
+        "Students must submit": 2,
+        "at least 14 days": 2,
+        "causal relationship": 2
+      },
+      "normalized_reference_match": false,
+      "normalized_word_differences": [
+        {
+          "operation": "replace",
+          "reference": [
+            "course",
+            "is"
+          ],
+          "recognized": [
+            "courses"
+          ]
+        }
+      ],
+      "final_lines": [
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The courses worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:00.14",
+          "end": "0:00:25.42",
+          "detected_language": "en"
+        },
+        {
+          "speaker": -2,
+          "text": "",
+          "start": "0:00:26.14",
+          "end": "0:00:32.26"
+        },
+        {
+          "speaker": 1,
+          "text": " Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance. The course is worth three credits. A deposit of $250 is refundable only if the cancellation is received at least 14 days before the course begins. The treatment reduced the average measurement, but the difference was not statistically significant. These findings do not establish a causal relationship",
+          "start": "0:00:32.04",
+          "end": "0:00:56.82",
+          "detected_language": "en"
+        }
+      ],
+      "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n",
+      "power_after": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22937699)\t90%; AC attached; not charging present: true\n"
+    }
+  ]
+}

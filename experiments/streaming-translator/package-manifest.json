@@ -1,0 +1,18 @@
+{
+  "version": "0.2.1",
+  "build": "4",
+  "app": "/Users/kevinzhu/Documents/ChatGPT/本地翻译器/dist/M0-20260917-115734-release/本地翻译器.app",
+  "zip": "/Users/kevinzhu/Documents/ChatGPT/本地翻译器/dist/M0-20260917-115734-release/本地翻译器-M0.zip",
+  "zip_sha256": "7d29bf9d892b880c7bc999b26514da996c3be19fdd0ac6d9c7de3062f0cc9f38",
+  "runtime_source_matches_bundle": true,
+  "runtime_sha256": {
+    "runtime/streaming_translator/store.py": "33d26630bbb49251197d32e19e747a3530b051023d2489658610148b55cf70a9",
+    "runtime/streaming_translator/refine.py": "7b6ef05e9b3492c0d9734afd86ae41e7ab8a5bb64aa635f4221dc0727410c88d",
+    "runtime/streaming_translator/__init__.py": "c297e52022a8be1df38d112c25b283a309e3273245c9fca9986b8b253a680b5d",
+    "runtime/streaming_translator/asr.py": "30b3babe90fae513cbf5029400c9b1d9d24f06206e83357ac2e3d3996998c282",
+    "runtime/streaming_translator/audio.py": "cf5b3d08c392042cf7614331ef04fd079ddedfad6476fb1ba9dc34879e61f13a",
+    "runtime/streaming_translator/ollama.py": "07952c6e15774b6d2ec9d2ca53428f30e20a3240b5c2e3b324819c346247a656",
+    "runtime/streaming_translator/__main__.py": "9c14f942d7097fcef85994f09ed3d4e1f0c2cdb773223f30428044d4093b3c12",
+    "runtime/streaming_translator/segmentation.py": "45867583a1b56c5fdeabd12d6571e649ff0a2ebc07304b6341f0534b0f93d563"
+  }
+}

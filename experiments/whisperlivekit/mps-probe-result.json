@@ -1,0 +1,43 @@
+{
+  "scope": "random-weight operator probe; no trained model or ASR pipeline",
+  "python": "3.12.14",
+  "torch": "2.14.0",
+  "mps_built": true,
+  "mps_available": true,
+  "fallback": "0",
+  "model_source_sha256": "90312085d198fc5b72dceda0d335e5b685c6afedc7edb87d98e120ac34bc8ee9",
+  "checks": {
+    "unmodified_model_to_mps": {
+      "status": "passed"
+    },
+    "decoder_float32": {
+      "status": "passed",
+      "parameter_device": "mps:0",
+      "alignment_metadata_device": "mps:0",
+      "alignment_index_iteration": "passed",
+      "max_logit_abs_diff_from_cpu_float32": 2.086162567138672e-07,
+      "cached_continuation": "passed",
+      "cross_attention": "passed",
+      "cache_tensor_count": 8
+    },
+    "decoder_float16": {
+      "status": "passed",
+      "parameter_device": "mps:0",
+      "alignment_metadata_device": "mps:0",
+      "alignment_index_iteration": "passed",
+      "max_logit_abs_diff_from_cpu_float32": 0.0004195570945739746,
+      "cached_continuation": "passed",
+      "cross_attention": "passed",
+      "cache_tensor_count": 8
+    },
+    "alignment_median_filter": {
+      "status": "passed",
+      "device": "mps:0"
+    }
+  },
+  "status": "operator_probe_passed",
+  "upstream_commit": "363e4f6d029694d9c81ae548beddd9d3c88a3637",
+  "hardware": "Apple M5 Pro, 20 GPU cores, Metal supported",
+  "date": "2026-09-15",
+  "execution_note": "MPS unavailable in sandbox; available in approved direct host execution"
+}

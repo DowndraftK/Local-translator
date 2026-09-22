@@ -1,0 +1,234 @@
+{
+  "date": "2026-09-17",
+  "scope": "One TED talk; not a classroom corpus or MT quality assessment",
+  "source_url": "https://www.ted.com/talks/celeste_headlee_10_ways_to_have_a_better_conversation",
+  "reference_sha256": "9a1aa2a2b112a7b92ec8a26017083f3528fc8bfd54941a1a401bb93159d77bd2",
+  "latency_limitations": "Segment ends are ASR estimates. Baseline clock offset about 0.5s. App builds overlapped trials; no controlled hardware comparison. First translation includes cold service/model wait.",
+  "streams": [
+    {
+      "session_id": "aa981b85-9fac-4248-9f5d-3f3db45ba449",
+      "state": "completed",
+      "audio_seconds": 680.2285625,
+      "processed_audio_seconds": 680.2285625,
+      "input_samples": 10883657,
+      "received_pcm_samples": 10883657,
+      "load_seconds": 1.6093685840023682,
+      "asr_elapsed_seconds": 689.1855337089946,
+      "input_finished_seconds": null,
+      "asr_tail_seconds": 8.955637084000045,
+      "asr_call_seconds": 673.6689697130059,
+      "asr_calls": 501,
+      "queue_peak_seconds": 21.756,
+      "first_committed_token_seconds": 6.314273583993781,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 147,
+        "failed": 0,
+        "disabled": 0
+      },
+      "source_sha256": "08dc9199379f231adec584c1a180c643e269616f3097d922f7a441a50e324d17",
+      "audio_sha256": "2643e3fced80dac14f13527a1fad46a4de866f65d06d1817780a73c4d580ac4a",
+      "device_evidence": {
+        "decoder_devices": [
+          "mps:0"
+        ],
+        "decoder_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "mps:0",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoder_dtype": "mlx.core.float16",
+        "full_mlx_decoder": false,
+        "mps_fallback": "0",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "session": "artifacts/streaming-translator-20260916/ted-mps-bilingual",
+      "segments": 147,
+      "coalesce_seconds": 0.5,
+      "boundary_counts": {
+        "sentence": 147
+      },
+      "snapshot_sha256": "aca490a7cf4b44ed5acf51ddeaff366f4537c3bafb29dbfd6ce0f3d104b87189",
+      "first_english_segment_seconds": 6.849231004714966,
+      "first_chinese_segment_seconds": 7.184283018112183,
+      "word_comparison": {
+        "reference_words": 1950,
+        "hypothesis_words": 1819,
+        "word_error_rate": 0.12615384615384614,
+        "errors": 246,
+        "counts": {
+          "insertion": 43,
+          "deletion": 174,
+          "substitution": 29
+        }
+      },
+      "estimated_english_end_lag": {
+        "median": 11.383106956481924,
+        "p95": 22.91225086021427,
+        "max": 30.135599773406966
+      },
+      "estimated_chinese_end_lag": {
+        "median": 11.938238985061503,
+        "p95": 23.683773859024086,
+        "max": 30.844514768600447
+      },
+      "translation_after_english": {
+        "median": 0.5359439849853516,
+        "p95": 1.2061240673065186,
+        "max": 1.6842381954193115
+      },
+      "all_input_received": true,
+      "empty_pending_english": true,
+      "max_context_tokens": null
+    },
+    {
+      "session_id": "7268abc0-cfb8-4662-bb85-9d1edcd72f50",
+      "state": "completed",
+      "audio_seconds": 680.2285625,
+      "processed_audio_seconds": 680.2285625,
+      "input_samples": 10883657,
+      "received_pcm_samples": 10883657,
+      "load_seconds": 6.140380791000098,
+      "asr_elapsed_seconds": 680.9369436659999,
+      "input_finished_seconds": 680.2312591660002,
+      "asr_tail_seconds": 0.7056863340003474,
+      "asr_call_seconds": 646.8895611849925,
+      "asr_calls": 872,
+      "queue_peak_seconds": 5.922,
+      "first_committed_token_seconds": 6.668310125000062,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 163,
+        "failed": 0,
+        "disabled": 0
+      },
+      "source_sha256": "08dc9199379f231adec584c1a180c643e269616f3097d922f7a441a50e324d17",
+      "audio_sha256": "2643e3fced80dac14f13527a1fad46a4de866f65d06d1817780a73c4d580ac4a",
+      "device_evidence": {
+        "decoder_devices": [
+          "mps:0"
+        ],
+        "decoder_dtypes": [
+          "torch.float32"
+        ],
+        "alignatt_device": "mps:0",
+        "mlx_default_device": "Device(gpu, 0)",
+        "encoder_dtype": "mlx.core.float16",
+        "full_mlx_decoder": false,
+        "mps_fallback": "0",
+        "torch": "2.14.0",
+        "mlx": "0.32.2"
+      },
+      "session": "artifacts/streaming-translator-20260917/ted-mps-context128",
+      "segments": 163,
+      "coalesce_seconds": 0.5,
+      "boundary_counts": {
+        "sentence": 162,
+        "pause": 1
+      },
+      "snapshot_sha256": "d3ca364710717a1e4fffa9413c867ff9175c930a794eeeeef96d75ef65ef6c65",
+      "first_english_segment_seconds": 8.272824048995972,
+      "first_chinese_segment_seconds": 23.015671014785767,
+      "word_comparison": {
+        "reference_words": 1950,
+        "hypothesis_words": 1919,
+        "word_error_rate": 0.04923076923076923,
+        "errors": 96,
+        "counts": {
+          "insertion": 20,
+          "substitution": 25,
+          "deletion": 51
+        }
+      },
+      "estimated_english_end_lag": {
+        "median": 2.6540740089416204,
+        "p95": 6.340263929367325,
+        "max": 18.798865184783935
+      },
+      "estimated_chinese_end_lag": {
+        "median": 3.206019084930432,
+        "p95": 7.280598936080935,
+        "max": 19.177718982696533
+      },
+      "translation_after_english": {
+        "median": 0.4291689395904541,
+        "p95": 1.1545038223266602,
+        "max": 14.742846965789795
+      },
+      "all_input_received": true,
+      "empty_pending_english": true,
+      "max_context_tokens": 128
+    }
+  ],
+  "native_refinement": {
+    "session_id": "5abc3c8c-d739-4ec4-836b-12fbeefd6aa2",
+    "parent_session_id": "aa981b85-9fac-4248-9f5d-3f3db45ba449",
+    "state": "completed",
+    "audio_seconds": 680.2285625,
+    "input_samples": 10883657,
+    "received_pcm_samples": 10883657,
+    "audio_sha256": "2643e3fced80dac14f13527a1fad46a4de866f65d06d1817780a73c4d580ac4a",
+    "refinement_seconds": 22.88266616599958,
+    "last_operation_seconds": 57.5846354589994,
+    "device_evidence": {
+      "backend": "mlx-whisper",
+      "mlx_default_device": "Device(gpu, 0)",
+      "mlx": "0.32.2",
+      "temperature": 0.0,
+      "word_timestamps": true
+    },
+    "translation_counts": {
+      "pending": 0,
+      "running": 0,
+      "completed": 152,
+      "failed": 0,
+      "disabled": 0
+    },
+    "segments": 152,
+    "snapshot_sha256": "e020eb6ed475cc5f87d7562e2502598ce75f4dbb7771c8ae3b60d37670b8781d",
+    "word_comparison": {
+      "reference_words": 1950,
+      "hypothesis_words": 1963,
+      "word_error_rate": 0.018461538461538463,
+      "errors": 36,
+      "counts": {
+        "insertion": 16,
+        "substitution": 17,
+        "deletion": 3
+      }
+    }
+  },
+  "offline_diagnostic": {
+    "elapsed_seconds": 18.752710082999783,
+    "result_sha256": "e08184c32ba08c17d00fd31b9d6fef944efeb180a93707b03d1caee618f6850e",
+    "word_comparison": {
+      "reference_words": 1950,
+      "hypothesis_words": 1963,
+      "word_error_rate": 0.018461538461538463,
+      "errors": 36,
+      "counts": {
+        "insertion": 16,
+        "substitution": 17,
+        "deletion": 3
+      }
+    }
+  },
+  "stdin_pcm": {
+    "state": "completed",
+    "samples": 417809,
+    "exact_pcm_match": true,
+    "pcm_sha256": "2480710b6370ce88fb99ce2bccd119f5b4af270b56f18833b147af69a771dd78",
+    "last_transport_write_bytes": 4964,
+    "segments": 6,
+    "scope": "stdin transport, archive and EOF; not a physical microphone test"
+  },
+  "interrupted_trial": {
+    "coalesce_seconds": 1,
+    "state_at_last_snapshot": "finishing_asr",
+    "completed_translations_at_last_snapshot": 146,
+    "excluded_from_complete_comparison": true
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/QuentinFuxa/WhisperLiveKit",
+  "commit": "363e4f6d029694d9c81ae548beddd9d3c88a3637",
+  "commit_date_utc": "2026-08-30T20:50:00Z",
+  "package_version": "0.2.26",
+  "review_date": "2026-09-15",
+  "archive_url": "https://codeload.github.com/QuentinFuxa/WhisperLiveKit/tar.gz/363e4f6d029694d9c81ae548beddd9d3c88a3637",
+  "archive_sha256": "12320732d23f4890a71e375212c52c1ee92047cc3697c53fa3209b74f52423f1",
+  "source_sha256": {
+    "pyproject.toml": "be09004b016ca04c207b8ca2c95afd53850aa4558f4ed8cd58264f25866e6085",
+    "whisperlivekit/local_agreement/online_asr.py": "a2b615a3cfe4702ec81624f5ce75af351228b3b24fba6a1ec0bcfa4aa7bf4fc4",
+    "whisperlivekit/processing_queue.py": "636111f3e065766eeabb4d18516d282a6df617e04aa303c67f1c25a2277d9f74",
+    "whisperlivekit/timed_objects.py": "083372186ec4b9d9cb2a5376231e357e7dd1863ff976888da4e77dbe5f66f2a4",
+    "whisperlivekit/tokens_alignment.py": "c127925aea1cff96b11ed0177f4e1b8888f84a71817ebb9890c4076cb2131617",
+    "whisperlivekit/diff_protocol.py": "48999a100802574ee533f6b172853cf4f46583aabe1bdb0f6772dd2dc139de75",
+    "whisperlivekit/translation_profiles.py": "89f94e4e0c6536623a5e6dd4c46479e0e24c7ab4705632aab9033f200f2f1130",
+    "whisperlivekit/translation_mlx_llm_mt.py": "a80e500ab12e008b2ebb1fda94f44f82e00fb91eae8d42ee54c2e72cd521a83a",
+    "whisperlivekit/translation_processor.py": "0fd66ae6aae9b8e8dd4e21ceb8da7f2c27c914e34089b3ac8d68cfe0430c5765",
+    "whisperlivekit/simul_whisper/backend.py": "7f46fd521f3f2417321ff6ba0939bea77481402cc9229e208a81a231b08e9032",
+    "whisperlivekit/whisper/__init__.py": "c3d90ca6a8621464c6d02675c510fe99740c512adbf00889c04b29bdf4138116",
+    "whisperlivekit/config.py": "c3861b64906766547c1aeb72d6faf5557b5ba114c0270391fad0f6ae84a751a9",
+    "whisperlivekit/parse_args.py": "036aba5c63cec2738f97f89b6a8b824bc85026afa40e87db6b8e5752b57bf8a6",
+    "tests/test_retention.py": "5f788cdc0ca36de5c9b8e10a167d288a6b50718689fdbf5791814ca4215bcd1c"
+  },
+  "validation": {
+    "python": "3.12.14",
+    "architecture": "arm64",
+    "numpy": "2.5.3",
+    "pytest": "9.1.1",
+    "passed": 14,
+    "expected_failures_reproduced": 3,
+    "models_loaded": false,
+    "swift_build": "Blocked by unaccepted Xcode license"
+  }
+}
