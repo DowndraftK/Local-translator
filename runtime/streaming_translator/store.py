@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 import time
@@ -17,12 +18,16 @@ def file_sha256(path):
 
 def atomic_json(path, value):
     path = Path(path)
-    temporary = path.with_name(path.name + '.tmp')
-    with temporary.open('w') as stream:
-        json.dump(value, stream, ensure_ascii=False, indent=2)
-        stream.write('\n')
-        stream.flush()
-    temporary.replace(path)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        with temporary.open('w') as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class SessionStore:
@@ -31,6 +36,10 @@ class SessionStore:
         self.directory.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.directory / 'session.sqlite', timeout=10)
         self.db.row_factory = sqlite3.Row
+        version = self.db.execute('PRAGMA user_version').fetchone()[0]
+        if version > 2:
+            self.db.close()
+            raise ValueError('任务数据库版本较新，请使用更新的应用。')
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.execute('PRAGMA foreign_keys=ON')
@@ -49,7 +58,17 @@ class SessionStore:
                 state TEXT NOT NULL, chinese TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0,
                 lease TEXT, started_at REAL, completed_at REAL, model TEXT,
                 result_json TEXT);
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id INTEGER PRIMARY KEY, sample INTEGER NOT NULL, sequence INTEGER NOT NULL,
+                segment_id INTEGER NOT NULL, pending_tokens TEXT NOT NULL,
+                media_digest TEXT NOT NULL, resources_digest TEXT NOT NULL, created_at REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS recovery_history (
+                id INTEGER PRIMARY KEY, created_at REAL NOT NULL, checkpoint_id INTEGER,
+                payload TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS translation_state ON translations(state, segment_id);
         ''')
+        if version < 2:
+            self.db.execute('PRAGMA user_version=2')
 
     def close(self):
         self.db.close()
@@ -92,8 +111,11 @@ class SessionStore:
                         (index, 'pending' if self.get('translation_model') else 'disabled', self.get('translation_model')))
         return index
 
-    def ingest(self, sequence, tokens, final=False):
-        payload = json.dumps({'tokens': tokens, 'final': final}, ensure_ascii=False, sort_keys=True)
+    def ingest(self, sequence, tokens, final=False, complete=None):
+        event = {'tokens': tokens, 'final': final}
+        if complete is not None:
+            event['complete'] = complete
+        payload = json.dumps(event, ensure_ascii=False, sort_keys=True)
         with self.transaction():
             previous = self.db.execute('SELECT payload FROM asr_events WHERE sequence=?', (sequence,)).fetchone()
             if previous:
@@ -108,8 +130,54 @@ class SessionStore:
             ids = [self._add_segment(segment) for segment in segments]
             self.set('pending_tokens', pending)
             if final:
-                self.set('asr_complete', True)
+                self.set('asr_complete', True if complete is None else complete)
             return ids
+
+    def next_sequence(self):
+        last = self.db.execute('SELECT MAX(sequence) FROM asr_events').fetchone()[0]
+        return 0 if last is None else last + 1
+
+    def checkpoint(self, sample, media_digest, resources_digest):
+        with self.transaction():
+            last = self.db.execute('SELECT MAX(sample) FROM checkpoints').fetchone()[0] or 0
+            if sample <= last:
+                return
+            self.db.execute('INSERT INTO checkpoints(sample,sequence,segment_id,pending_tokens,media_digest,resources_digest,created_at) VALUES (?,?,?,?,?,?,?)',
+                (sample, self.next_sequence()-1,
+                 self.db.execute('SELECT COALESCE(MAX(id),0) FROM segments').fetchone()[0],
+                 json.dumps(self.get('pending_tokens', [])), media_digest, resources_digest, time.time()))
+
+    def latest_checkpoint(self):
+        row = self.db.execute('SELECT * FROM checkpoints ORDER BY sample DESC LIMIT 1').fetchone()
+        return dict(row) if row else None
+
+    def restart_from_checkpoint(self, checkpoint):
+        # The caller validates media and resource digests BEFORE this transaction.
+        sample = checkpoint['sample'] if checkpoint else 0
+        sequence = checkpoint['sequence'] if checkpoint else -1
+        segment_id = checkpoint['segment_id'] if checkpoint else 0
+        with self.transaction():
+            tail = {table: [dict(row) for row in self.db.execute(query, (bound,))] for table, query, bound in [
+                ('segments', 'SELECT * FROM segments WHERE id>?', segment_id),
+                ('translations', 'SELECT * FROM translations WHERE segment_id>?', segment_id),
+                ('source_revisions', 'SELECT * FROM source_revisions WHERE segment_id>?', segment_id),
+                ('asr_events', 'SELECT * FROM asr_events WHERE sequence>?', sequence)]}
+            tail['metadata'] = {row['key']: json.loads(row['value']) for row in self.db.execute('SELECT * FROM metadata')}
+            self.db.execute('INSERT INTO recovery_history(created_at,checkpoint_id,payload) VALUES (?,?,?)',
+                (time.time(), checkpoint['id'] if checkpoint else None, json.dumps(tail, ensure_ascii=False)))
+            for table in ('translations', 'source_revisions'):
+                self.db.execute(f'DELETE FROM {table} WHERE segment_id>?', (segment_id,))
+            self.db.execute('DELETE FROM segments WHERE id>?', (segment_id,))
+            self.db.execute('DELETE FROM asr_events WHERE sequence>?', (sequence,))
+            self.set('pending_tokens', json.loads(checkpoint['pending_tokens']) if checkpoint else [])
+            self.set('asr_complete', False)
+            self.set('resume_sample', sample)
+            self.set('error', None)
+            self.set('asr_error', None)
+            self.set('state', 'preparing')
+            self.set('stopped', False)
+        self.recover(retry_failed=True)
+        return sample
 
     def claim(self):
         with self.transaction():
@@ -155,21 +223,33 @@ class SessionStore:
                             (revision, 'pending' if self.get('translation_model') else 'disabled', segment_id))
             self.set('state', 'needs_translation' if self.get('translation_model') else self.get('state'))
 
-    def snapshot(self):
+    def snapshot(self, limit=None, offset=None):
+        total = self.db.execute('SELECT COUNT(*) FROM segments').fetchone()[0]
+        offset = max(0, total-limit) if limit is not None and offset is None else max(0, offset or 0)
         rows = self.db.execute('''SELECT s.*,t.state AS translation_state,t.chinese,t.error AS translation_error,
             t.attempts,t.started_at AS translation_started_at,t.completed_at AS translated_at
-            FROM segments s JOIN translations t ON t.segment_id=s.id ORDER BY s.id''').fetchall()
+            FROM segments s JOIN translations t ON t.segment_id=s.id ORDER BY s.id LIMIT ? OFFSET ?''',
+            (-1 if limit is None else limit, offset)).fetchall()
         metadata = {row['key']: json.loads(row['value']) for row in self.db.execute('SELECT * FROM metadata')}
         pending = metadata.pop('pending_tokens', [])
-        metadata.update(segments=[dict(row) for row in rows],
+        metadata.update(segment_count=total, segment_offset=offset, segments=[dict(row) for row in rows],
                         pending_english=''.join(t['text'] for t in pending).strip(),
                         updated_at=time.time())
-        metadata['translation_counts'] = {s: sum(r['translation_state'] == s for r in rows)
-                                          for s in ['pending', 'running', 'completed', 'failed', 'disabled']}
+        counts = dict(self.db.execute('SELECT state,COUNT(*) FROM translations GROUP BY state'))
+        metadata['translation_counts'] = {s: counts.get(s, 0) for s in ['pending', 'running', 'completed', 'failed', 'disabled']}
+        metadata['checkpoint_sample'] = self.db.execute('SELECT COALESCE(MAX(sample),0) FROM checkpoints').fetchone()[0]
         return metadata
 
-    def publish(self):
-        snapshot = self.snapshot()
+    def publish(self, limit=200, offset=None):
+        request = self.directory / 'view.json'
+        if offset is None and request.exists():
+            try:
+                offset = json.loads(request.read_text()).get('offset')
+                if offset is not None:
+                    offset = max(0, int(offset))
+            except (ValueError, OSError, TypeError):
+                offset = None
+        snapshot = self.snapshot(limit=limit, offset=offset)
         atomic_json(self.directory / 'snapshot.json', snapshot)
         return snapshot
 

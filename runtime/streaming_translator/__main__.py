@@ -1,6 +1,7 @@
 """CLI worker for the native app. No network listener and no implicit downloads."""
 import argparse
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import json
 import logging
@@ -18,9 +19,16 @@ def arguments():
     config = sub.add_parser('configure')
     config.add_argument('--project', type=Path, required=True)
     config.add_argument('--output', type=Path, required=True)
-    for name in ['run', 'refine', 'retry', 'status', 'export', 'revise']:
+    for name in ['run', 'record', 'resume', 'refine', 'retry', 'status', 'page', 'export', 'revise']:
         p = sub.add_parser(name)
         p.add_argument('--session', type=Path, required=True)
+        if name == 'record':
+            p.add_argument('--config', type=Path, required=True)
+            p.add_argument('--translation-model', default='hy-mt2:1.8b-q8')
+            p.add_argument('--no-translation', action='store_true')
+        if name == 'status':
+            p.add_argument('--limit', type=int)
+            p.add_argument('--offset', type=int)
         if name == 'refine':
             p.add_argument('--from-session', type=Path, required=True)
             p.add_argument('--config', type=Path, required=True)
@@ -37,6 +45,7 @@ def arguments():
             p.add_argument('--max-context-tokens', type=int)
             p.add_argument('--translation-model', default='hy-mt2:1.8b-q8')
             p.add_argument('--no-translation', action='store_true')
+            p.add_argument('--no-vad', action='store_true')
             p.add_argument('--endpoint', default='http://127.0.0.1:11434')
         if name == 'retry':
             p.add_argument('--retry-failed', action='store_true')
@@ -90,6 +99,7 @@ async def execute(args, store):
         if args.max_audio_seconds is not None and args.max_audio_seconds <= 0:
             raise ValueError('测试音频长度必须大于零。')
         config = json.loads(args.config.read_text())
+        config['vad'] = not args.no_vad
         for key in ['device', 'dtype']:
             if getattr(args, key):
                 config[key] = getattr(args, key)
@@ -106,6 +116,18 @@ async def execute(args, store):
                          playback_mode='paced' if args.paced else 'batch',
                          requested_audio_limit=args.max_audio_seconds)
         atomic_json(store.directory/'runtime.json', config)
+    elif args.command == 'record':
+        config = json.loads(args.config.read_text())
+        store.initialize(translation_model=None if args.no_translation else args.translation_model,
+                         input_kind='recording', endpoint='http://127.0.0.1:11434')
+        atomic_json(store.directory/'runtime.json', config)
+    elif args.command == 'resume':
+        from .capture import validate_resume
+        from .asr import validate_resources
+        config = json.loads((store.directory/'runtime.json').read_text())
+        checkpoint = validate_resume(store, config)
+        await asyncio.to_thread(validate_resources, config)
+        store.restart_from_checkpoint(checkpoint)
     elif args.command == 'refine':
         from .refine import initialize_refinement
         config = json.loads(args.config.read_text())
@@ -118,6 +140,14 @@ async def execute(args, store):
         store.update(state='translating', stopped=False)
         done.set()
 
+    async def measure_periodically():
+        from .telemetry import process_metrics
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='telemetry') as executor:
+            while True:
+                metrics = await loop.run_in_executor(executor, process_metrics)
+                store.update(**metrics)
+                await asyncio.sleep(5)
+
     async def publish_periodically():
         with (store.directory/'progress.jsonl').open('a') as progress:
             while True:
@@ -126,26 +156,51 @@ async def execute(args, store):
                     'time': time.time(), 'state': snapshot.get('state'),
                     'received_audio_seconds': snapshot.get('received_audio_seconds'),
                     'asr_queue_seconds': snapshot.get('asr_queue_seconds'),
+                    'asr_backlog_seconds': snapshot.get('asr_backlog_seconds'),
+                    'processed_audio_seconds': snapshot.get('processed_audio_seconds'),
                     'translation_counts': snapshot['translation_counts'],
-                    'segments': len(snapshot['segments']),
+                    'segments': snapshot['segment_count'],
+                    **{k: snapshot.get(k) for k in ('worker_pid', 'worker_rss_bytes', 'worker_peak_rss_bytes', 'worker_cpu_seconds')},
                 })+'\n')
                 progress.flush()
                 await asyncio.sleep(.5)
 
     publisher = asyncio.create_task(publish_periodically())
+    monitor = asyncio.create_task(measure_periodically())
     translator = asyncio.create_task(translation_loop(store, done, stop))
     stop_task = asyncio.create_task(stop.wait())
     error = None
     try:
-        if args.command in ('run', 'refine'):
+        if args.command in ('run', 'refine', 'resume', 'record'):
             try:
-                if args.command == 'refine':
+                if args.command == 'record':
+                    from .capture import PCMArchive
+                    from .store import file_sha256
+                    archive = PCMArchive(store)
+                    store.update(state='recording')
+                    store.publish()
+                    receive = asyncio.create_task(archive.receive())
+                    try:
+                        finished, _ = await asyncio.wait([receive, stop_task], return_when=asyncio.FIRST_COMPLETED)
+                        if receive not in finished:
+                            receive.cancel()
+                        await asyncio.gather(receive, return_exceptions=True)
+                        if receive.done() and not receive.cancelled() and receive.exception():
+                            raise receive.exception()
+                    finally:
+                        if not receive.done():
+                            receive.cancel()
+                            await asyncio.gather(receive, return_exceptions=True)
+                    store.update(input_samples=archive.samples, audio_seconds=archive.samples/16000,
+                                 audio_sha256=file_sha256(archive.path))
+                elif args.command == 'refine':
                     from .refine import refine
                     await refine(store, config, args.from_session, stop)
                 else:
                     from .asr import recognize
-                    await recognize(store, config, args.input, args.paced, stop,
-                                    args.max_audio_seconds, stdin_pcm=args.stdin_pcm)
+                    await recognize(store, config, getattr(args, 'input', None), getattr(args, 'paced', False), stop,
+                                    getattr(args, 'max_audio_seconds', None), stdin_pcm=getattr(args, 'stdin_pcm', False),
+                                    resume=args.command == 'resume')
             except Exception as exc:
                 error = str(exc)
                 store.update(asr_error=error)
@@ -160,17 +215,19 @@ async def execute(args, store):
         if translator.done() and not translator.cancelled() and translator.exception():
             error = str(translator.exception())
     finally:
-        for task in (publisher, translator, stop_task):
+        for task in (publisher, monitor, translator, stop_task):
             if not task.done():
                 task.cancel()
-        await asyncio.gather(publisher, translator, stop_task, return_exceptions=True)
+        await asyncio.gather(publisher, monitor, translator, stop_task, return_exceptions=True)
         counts = store.snapshot()['translation_counts']
         state = ('stopped' if stop.is_set() else 'failed' if error else
                  'needs_translation' if counts['failed'] or counts['pending'] or counts['running'] else
+                 'recorded' if args.command == 'record' else
                  'completed' if store.get('asr_complete') else 'incomplete_asr')
         store.update(state=state, last_operation_seconds=time.monotonic()-started,
                      error=error, finished_at=time.time())
-        snapshot = store.publish()
+        store.publish()
+        snapshot = store.snapshot()
         for kind in ('txt', 'srt', 'vtt'):
             (store.directory / f'subtitles.{kind}').write_text(export_subtitles(snapshot, kind))
     print(json.dumps({'event': 'finished', 'state': state, 'segments': len(snapshot['segments']),
@@ -213,14 +270,24 @@ def main():
     store = SessionStore(args.session)
     try:
         if args.command == 'status':
-            print(json.dumps(store.snapshot(), ensure_ascii=False))
+            snapshot = store.snapshot(limit=args.limit, offset=args.offset)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                snapshot['worker_active'] = False
+            except BlockingIOError:
+                snapshot['worker_active'] = True
+            print(json.dumps(snapshot, ensure_ascii=False))
+            return 0
+        if args.command == 'page':
+            store.publish()
             return 0
         if args.command == 'export':
             source = store.get('source_path')
             target = args.output.resolve()
             protected = [args.session.resolve()/name for name in (
                 'session.sqlite', 'session.sqlite-wal', 'session.sqlite-shm', 'worker.lock',
-                'snapshot.json', 'runtime.json', 'audio.wav', 'warmup.wav', 'progress.jsonl', 'refinement.json')]
+                'snapshot.json', 'runtime.json', 'audio.wav', 'warmup.wav', 'progress.jsonl', 'refinement.json',
+                'capture-events.jsonl', 'view.json')]
             if target in protected or (source and target == Path(source).resolve()):
                 raise ValueError('导出路径不能覆盖原录音或任务数据库。')
             args.output.write_text(export_subtitles(store.snapshot(), args.format))
