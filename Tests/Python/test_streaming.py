@@ -43,6 +43,27 @@ def test_pause_and_length_boundaries_are_explicit_fragments():
     assert result[0]['boundary'] == 'length_limit' and not pending
 
 
+def test_punctuation_only_asr_events_do_not_create_subtitles_or_translation_jobs(tmp_path):
+    store = new_store(tmp_path)
+    events = [
+        [token(' .', 1, 1.1)],
+        [token(' .', 1.2, 1.3)],
+        [token(' ...', 1.4, 1.5)],
+        [token(' Go.', 2, 3), token(' Go.', 3, 4), token(' 3.14.', 4, 5)],
+        [token(' …', 5, 5.1)],
+    ]
+    for sequence, tokens in enumerate(events):
+        store.ingest(sequence, tokens)
+    store.ingest(len(events), [], final=True)
+    snapshot = store.snapshot()
+    assert [s['english'] for s in snapshot['segments']] == ['Go.', 'Go.', '3.14.']
+    assert snapshot['translation_counts']['pending'] == 3
+    assert not snapshot['pending_english']
+    assert store.db.execute('SELECT COUNT(*) FROM asr_events').fetchone()[0] == len(events)+1
+    assert json.loads(store.db.execute('SELECT payload FROM asr_events WHERE sequence=0').fetchone()[0])['tokens'] == events[0]
+    store.close()
+
+
 def new_store(tmp_path):
     store = SessionStore(tmp_path)
     store.initialize(translation_model='hy-mt2:1.8b-q8', endpoint='http://127.0.0.1:11434')

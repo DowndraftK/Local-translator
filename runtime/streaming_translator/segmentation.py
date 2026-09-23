@@ -27,7 +27,7 @@ def sentence_cuts(text, final=False):
 
 
 def take_segments(tokens, final=False, max_seconds=30, max_chars=1200):
-    """Consume whole tokens; preserve all text, order, and genuine repetitions.
+    """Consume whole tokens; preserve spoken text, order, and genuine repetitions.
 
     Tokens carry original text and estimated times. No text-based deduplication.
     Long fragments get an explicit boundary reason, not an assertion of completeness.
@@ -59,7 +59,10 @@ def take_segments(tokens, final=False, max_seconds=30, max_chars=1200):
             # Never split an ASR token; an unusual multi-sentence token stays together.
         selected, tokens = tokens[:count], tokens[count:]
         source = ''.join(t['text'] for t in selected).strip()
-        if source:
+        # A decoder may confirm standalone periods/ellipses around pauses. They
+        # are not speech and must not create subtitle rows or translation jobs.
+        # The original event payload remains in SessionStore for inspection.
+        if any(char.isalnum() for char in source):
             segments.append({'english': source, 'start': min(t['start'] for t in selected),
                              'end': max(t['end'] for t in selected), 'boundary': reason})
     return segments, tokens

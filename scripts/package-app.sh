@@ -37,7 +37,7 @@ app=Path(sys.argv[1]); project=Path(sys.argv[2])
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.2', 'CFBundleVersion':'5',
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.2', 'CFBundleVersion':'6',
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',

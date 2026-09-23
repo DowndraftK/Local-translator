@@ -1,0 +1,646 @@
+{
+  "scope": "One single-speaker TED recording repeated five full times plus a partial sixth; stability evidence, not independent classroom or human translation quality acceptance.",
+  "timezone": "Asia/Shanghai",
+  "started_at": "2026-09-23T13:05:27.286332+08:00",
+  "finished_at": "2026-09-23T14:05:34.083828+08:00",
+  "wall_seconds": 3606.7974960803986,
+  "exit_code": 0,
+  "fixture": {
+    "channels": 1,
+    "sample_width": 2,
+    "sample_rate": 16000,
+    "samples": 57600000,
+    "pcm_sha256": "00c470fcb0bb1fd7e0865113eec2a7a200cefe607b5c55b5f8b804a557740568"
+  },
+  "checks": {
+    "sqlite_quick_check": [
+      [
+        "ok"
+      ]
+    ],
+    "foreign_key_check": [],
+    "events": 4846,
+    "event_sequence_contiguous": true,
+    "recovery_count": 0,
+    "revision_count": 841,
+    "translation_attempt_counts": {
+      "1": 841
+    },
+    "translation_errors": 0,
+    "active_leases": 0,
+    "revision_mismatches": 0,
+    "all_sample_counts_equal": true,
+    "expected_fixture_pcm_matches": true,
+    "source_pcm_hash_matches": true,
+    "file_hashes_match_metadata": true,
+    "vad_sample_sum_matches": true,
+    "runtime_hashes_match": true,
+    "segments": 841,
+    "snapshot_ui_segments": 200,
+    "segment_ids_contiguous": true,
+    "all_english_nonempty": true,
+    "all_chinese_nonempty": true,
+    "all_chinese_contain_han": false,
+    "pending_english_empty": true,
+    "invalid_time_ids": [],
+    "zero_duration_ids": [],
+    "nonmonotonic_start_ids": [
+      58,
+      796
+    ],
+    "overlapping_ids": [
+      51,
+      58,
+      59,
+      126,
+      186,
+      203,
+      233,
+      274,
+      349,
+      353,
+      395,
+      450,
+      457,
+      469,
+      496,
+      506,
+      530,
+      575,
+      580,
+      634,
+      656,
+      668,
+      699,
+      796
+    ],
+    "exports": {
+      "txt": {
+        "matches_complete_database": true,
+        "bytes": 131072
+      },
+      "srt": {
+        "matches_complete_database": true,
+        "bytes": 143191
+      },
+      "vtt": {
+        "matches_complete_database": true,
+        "bytes": 143199
+      }
+    }
+  },
+  "completion": {
+    "state": "completed",
+    "asr_complete": true,
+    "error": null,
+    "translation_counts": {
+      "pending": 0,
+      "running": 0,
+      "completed": 841,
+      "failed": 0,
+      "disabled": 0
+    },
+    "processed_audio_seconds": 3600.0,
+    "vad_late_events": 0
+  },
+  "timings": {
+    "load_seconds": 1.512671832999331,
+    "input_finished_seconds": 3600.0027689579983,
+    "asr_elapsed_seconds": 3601.7901179579967,
+    "asr_tail_seconds": 1.787349042002461,
+    "asr_call_seconds": 3432.3192173239877,
+    "asr_calls": 5353,
+    "queue_peak_seconds": 4.538
+  },
+  "pipeline_tail_seconds": 2.1732778902987775,
+  "asr_call_time_ratio": 0.9534220048122188,
+  "estimated_english_end_lag": {
+    "count": 841,
+    "first": 2.4448457336425777,
+    "last": 2.4735867862700616,
+    "min": 2.4448457336425777,
+    "median": 4.471303922653533,
+    "p95": 5.6439231052397645,
+    "max": 34.39318989372259
+  },
+  "estimated_chinese_end_lag": {
+    "count": 841,
+    "first": 3.884641942977905,
+    "last": 2.8118479137419854,
+    "min": 2.677857952117847,
+    "median": 4.998023960113642,
+    "p95": 6.279401819229406,
+    "max": 35.57205008125311
+  },
+  "translation_after_english": {
+    "count": 841,
+    "first": 1.4397962093353271,
+    "last": 0.33826112747192383,
+    "min": 0.05592823028564453,
+    "median": 0.44976115226745605,
+    "p95": 1.159703016281128,
+    "max": 2.072376251220703
+  },
+  "progress_rows": 7092,
+  "system_rows": 359,
+  "distinct_worker_measurements": 710,
+  "running_backlog_seconds": {
+    "count": 7080,
+    "first": 0.5,
+    "last": 2.5,
+    "min": 0.5,
+    "median": 3.0,
+    "p95": 4.0,
+    "max": 11.852
+  },
+  "translation_outstanding": {
+    "count": 7092,
+    "first": 0,
+    "last": 1,
+    "min": 0,
+    "median": 0.0,
+    "p95": 1,
+    "max": 3
+  },
+  "sampled_worker_rss_gib": {
+    "count": 710,
+    "first": 0.029052734375,
+    "last": 3.7938995361328125,
+    "min": 0.029052734375,
+    "median": 3.718170166015625,
+    "p95": 3.779144287109375,
+    "max": 3.7938995361328125
+  },
+  "process_lifetime_peak_rss_gib": 4.5980377197265625,
+  "worker_cpu_seconds": 384.35440500000004,
+  "worker_cpu_average_percent_one_core": 10.657404613761022,
+  "worker_cpu_interval_percent": {
+    "count": 709,
+    "first": 89.6310987451622,
+    "last": 8.528354142682197,
+    "min": 3.5420153468892615,
+    "median": 10.038170264320183,
+    "p95": 14.838373590690454,
+    "max": 89.6310987451622
+  },
+  "ollama_combined_rss_gib": {
+    "count": 359,
+    "first": 0.03765869140625,
+    "last": 2.79815673828125,
+    "min": 0.03765869140625,
+    "median": 2.6381988525390625,
+    "p95": 2.7620849609375,
+    "max": 2.79815673828125
+  },
+  "swap_used_mib": {
+    "count": 359,
+    "first": 0.0,
+    "last": 0.0,
+    "min": 0.0,
+    "median": 0.0,
+    "p95": 0.0,
+    "max": 0.0
+  },
+  "vm_stats": {
+    "compressor_gib": {
+      "count": 359,
+      "first": 0.8814697265625,
+      "last": 1.8348846435546875,
+      "min": 0.8814697265625,
+      "median": 1.8348846435546875,
+      "p95": 1.848297119140625,
+      "max": 1.85321044921875
+    },
+    "swapins": {
+      "count": 359,
+      "first": 0,
+      "last": 0,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "swapouts": {
+      "count": 359,
+      "first": 0,
+      "last": 0,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "pages_throttled": {
+      "count": 359,
+      "first": 0,
+      "last": 0,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "pageouts": {
+      "count": 359,
+      "first": 14,
+      "last": 95,
+      "min": 14,
+      "median": 32,
+      "p95": 95,
+      "max": 95
+    }
+  },
+  "thermal_records": {
+    "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded": 359
+  },
+  "ten_minute_bins": [
+    {
+      "minutes": [
+        0,
+        10
+      ],
+      "backlog_seconds": {
+        "count": 1182,
+        "first": 0.5,
+        "last": 3.0,
+        "min": 0.5,
+        "median": 3.0,
+        "p95": 4.0,
+        "max": 6.224
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 2.4103240966796875,
+        "last": 3.4564208984375,
+        "min": 2.4103240966796875,
+        "median": 3.392730712890625,
+        "p95": 3.4559783935546875,
+        "max": 3.4564208984375
+      },
+      "translation_outstanding": {
+        "count": 1182,
+        "first": 0,
+        "last": 0,
+        "min": 0,
+        "median": 0.0,
+        "p95": 1,
+        "max": 3
+      }
+    },
+    {
+      "minutes": [
+        10,
+        20
+      ],
+      "backlog_seconds": {
+        "count": 1180,
+        "first": 3.0,
+        "last": 3.5,
+        "min": 2.0,
+        "median": 3.0,
+        "p95": 4.5,
+        "max": 11.592
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 3.4575653076171875,
+        "last": 3.6741790771484375,
+        "min": 3.4562530517578125,
+        "median": 3.5038299560546875,
+        "p95": 3.6737518310546875,
+        "max": 3.6741790771484375
+      },
+      "translation_outstanding": {
+        "count": 1180,
+        "first": 0,
+        "last": 0,
+        "min": 0,
+        "median": 0.0,
+        "p95": 1,
+        "max": 2
+      }
+    },
+    {
+      "minutes": [
+        20,
+        30
+      ],
+      "backlog_seconds": {
+        "count": 1180,
+        "first": 3.0,
+        "last": 3.0,
+        "min": 2.0,
+        "median": 3.0,
+        "p95": 4.0,
+        "max": 11.852
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 3.6742401123046875,
+        "last": 3.7181243896484375,
+        "min": 3.6742401123046875,
+        "median": 3.70916748046875,
+        "p95": 3.717620849609375,
+        "max": 3.7181243896484375
+      },
+      "translation_outstanding": {
+        "count": 1180,
+        "first": 0,
+        "last": 0,
+        "min": 0,
+        "median": 0.0,
+        "p95": 1,
+        "max": 2
+      }
+    },
+    {
+      "minutes": [
+        30,
+        40
+      ],
+      "backlog_seconds": {
+        "count": 1179,
+        "first": 3.0,
+        "last": 3.0,
+        "min": 2.0,
+        "median": 3.0,
+        "p95": 4.0,
+        "max": 11.612
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 3.7182159423828125,
+        "last": 3.7478790283203125,
+        "min": 3.7182159423828125,
+        "median": 3.7406997680664062,
+        "p95": 3.74755859375,
+        "max": 3.7478790283203125
+      },
+      "translation_outstanding": {
+        "count": 1179,
+        "first": 0,
+        "last": 0,
+        "min": 0,
+        "median": 0,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    {
+      "minutes": [
+        40,
+        50
+      ],
+      "backlog_seconds": {
+        "count": 1180,
+        "first": 2.5,
+        "last": 3.5,
+        "min": 2.0,
+        "median": 3.0,
+        "p95": 3.5,
+        "max": 11.404
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 3.7479705810546875,
+        "last": 3.76611328125,
+        "min": 3.7479705810546875,
+        "median": 3.75341796875,
+        "p95": 3.7654876708984375,
+        "max": 3.76611328125
+      },
+      "translation_outstanding": {
+        "count": 1180,
+        "first": 1,
+        "last": 0,
+        "min": 0,
+        "median": 0.0,
+        "p95": 1,
+        "max": 1
+      }
+    },
+    {
+      "minutes": [
+        50,
+        60
+      ],
+      "backlog_seconds": {
+        "count": 1179,
+        "first": 3.0,
+        "last": 2.5,
+        "min": 2.0,
+        "median": 3.0,
+        "p95": 3.5,
+        "max": 11.664
+      },
+      "rss_gib": {
+        "count": 118,
+        "first": 3.7662506103515625,
+        "last": 3.793853759765625,
+        "min": 3.7662506103515625,
+        "median": 3.7711868286132812,
+        "p95": 3.7933197021484375,
+        "max": 3.793853759765625
+      },
+      "translation_outstanding": {
+        "count": 1179,
+        "first": 0,
+        "last": 0,
+        "min": 0,
+        "median": 0,
+        "p95": 1,
+        "max": 1
+      }
+    }
+  ],
+  "repetition_wer": [
+    {
+      "repetition": 1,
+      "start": 0.0,
+      "end": 682.2285625,
+      "segment_ids": [
+        1,
+        160
+      ],
+      "reference_words": 1950,
+      "hypothesis_words": 1970,
+      "word_error_rate": 0.033846153846153845,
+      "errors": 66,
+      "counts": {
+        "insertion": 31,
+        "deletion": 11,
+        "substitution": 24
+      }
+    },
+    {
+      "repetition": 2,
+      "start": 682.2285625,
+      "end": 1364.457125,
+      "segment_ids": [
+        161,
+        305
+      ],
+      "reference_words": 1950,
+      "hypothesis_words": 1861,
+      "word_error_rate": 0.08307692307692308,
+      "errors": 162,
+      "counts": {
+        "deletion": 112,
+        "insertion": 23,
+        "substitution": 27
+      }
+    },
+    {
+      "repetition": 3,
+      "start": 1364.457125,
+      "end": 2046.6856875,
+      "segment_ids": [
+        306,
+        472
+      ],
+      "reference_words": 1950,
+      "hypothesis_words": 1977,
+      "word_error_rate": 0.04051282051282051,
+      "errors": 79,
+      "counts": {
+        "insertion": 36,
+        "substitution": 34,
+        "deletion": 9
+      }
+    },
+    {
+      "repetition": 4,
+      "start": 2046.6856875,
+      "end": 2728.91425,
+      "segment_ids": [
+        473,
+        635
+      ],
+      "reference_words": 1950,
+      "hypothesis_words": 1976,
+      "word_error_rate": 0.03333333333333333,
+      "errors": 65,
+      "counts": {
+        "insertion": 34,
+        "substitution": 23,
+        "deletion": 8
+      }
+    },
+    {
+      "repetition": 5,
+      "start": 2728.91425,
+      "end": 3411.1428125,
+      "segment_ids": [
+        636,
+        812
+      ],
+      "reference_words": 1950,
+      "hypothesis_words": 1953,
+      "word_error_rate": 0.05333333333333334,
+      "errors": 104,
+      "counts": {
+        "insertion": 27,
+        "substitution": 53,
+        "deletion": 24
+      }
+    }
+  ],
+  "reference_sha256": "9a1aa2a2b112a7b92ec8a26017083f3528fc8bfd54941a1a401bb93159d77bd2",
+  "evidence_sha256": {
+    "manifest.json": "962ea7ba13aee0ee0f22227f72cfdc6810b4e0fccf4c3857625af316664dc743",
+    "session/snapshot.json": "bed295733b40cb84c3d3bbe49c91920f17d2c6e03a2a916c4b76428c2d95ed22",
+    "session/progress.jsonl": "42c0cd3806793d3fc8cb2acbc42ef5d6bc7b344bf57aa6a61afd9879c80ee61a",
+    "system.jsonl": "ac463d6e8f0b104de74f5efc9ff94cd2af23713bf02e29843ae4d740b895b2e4",
+    "worker.log": "12fb60ac482c824cbe643e4d09cd91a1e1bae59c4ac28aac19174b470917c038",
+    "session/subtitles.txt": "114efd8a9a2000289c3473f20e4e0a9d279204e273cdfb2a954efae075c980df",
+    "session/subtitles.srt": "03a412d8dfd3e4dce069b157649399052174679c998f380654b650042e7181d1",
+    "session/subtitles.vtt": "d0e64abe759aa1a84cd91b149236ca984be4712599ee1f3c1cb91bd673e5f51f"
+  },
+  "status": "pipeline_completed_quality_not_accepted",
+  "source_commit_before_closeout": "174dbd6",
+  "original_test_build": 5,
+  "aggregate_complete_repetitions_wer": {
+    "errors": 476,
+    "reference_words": 9750,
+    "rate": 0.04882051282051282
+  },
+  "original_export_validation": {
+    "srt_cues": 841,
+    "vtt_cues": 841,
+    "txt_segments": 841,
+    "monotonic_srt_vtt": true,
+    "within_audio_duration": true
+  },
+  "quality_findings": {
+    "punctuation_only_segments": 9,
+    "nonempty_chinese_substantive_segments": 832,
+    "severe_omissions_repeat": 2,
+    "unstable_repetition_repeat": 5,
+    "upstream_rewind_guard_count": 1,
+    "manual_chinese_quality_acceptance": false
+  },
+  "fix_verification": {
+    "passed": true,
+    "source_events": 4846,
+    "original_segments": 841,
+    "replayed_segments": 832,
+    "removed_original_segment_ids": [
+      56,
+      57,
+      58,
+      177,
+      526,
+      527,
+      528,
+      529,
+      831
+    ],
+    "all_spoken_text_times_and_boundaries_unchanged": true,
+    "all_raw_events_retained": true,
+    "pending_english_empty": true,
+    "translation_jobs": {
+      "pending": 832,
+      "running": 0,
+      "completed": 0,
+      "failed": 0,
+      "disabled": 0
+    },
+    "export_cues": {
+      "srt": 832,
+      "vtt": 832,
+      "txt": 832
+    },
+    "note": "Replays saved confirmed ASR events through corrected sentence/store pipeline; no model inference or retranslation. Original endurance evidence remains unchanged.",
+    "segmentation_sha256": "f32d196abf9dd904709386933434892e08fdd52f9a22c9f16a056878aaaccb07"
+  },
+  "python_regression_passed": 45,
+  "swift_regression_passed_previous": 14,
+  "real_model_recovery_passed": true,
+  "package": {
+    "app": "dist/M0-20260923-214836-release/本地翻译器.app",
+    "version": "0.2.2",
+    "build": "6",
+    "runtime_matches_source": true,
+    "runtime_files": {
+      "store.py": "592bed7e2a481e97663053897fb05cc6dc09d0400091683979bad0aa284426bd",
+      "refine.py": "7b6ef05e9b3492c0d9734afd86ae41e7ab8a5bb64aa635f4221dc0727410c88d",
+      "__init__.py": "c297e52022a8be1df38d112c25b283a309e3273245c9fca9986b8b253a680b5d",
+      "telemetry.py": "d51721c1df6ba4615afece95b2a7f2f8ebbfd592287094ed417a54f160ef290e",
+      "asr.py": "c632005ad42e4aa5d591d1fb4dc82bf830a6c7fe561c8d338d18b6e6bb537965",
+      "capture.py": "3ae22f37b4a9fead239e8a8b6c18df1eb671ff09efd64795824fdff80b63d025",
+      "audio.py": "cf5b3d08c392042cf7614331ef04fd079ddedfad6476fb1ba9dc34879e61f13a",
+      "vad.py": "f000cbf1025c1d5473f0a462f9b9d488691354eb83f36b668fca825340ed00dc",
+      "ollama.py": "07952c6e15774b6d2ec9d2ca53428f30e20a3240b5c2e3b324819c346247a656",
+      "__main__.py": "97be79b0a2a8bef6efecf7faca054d79a48884b47e731772adf93deb24f421aa",
+      "segmentation.py": "f32d196abf9dd904709386933434892e08fdd52f9a22c9f16a056878aaaccb07"
+    },
+    "zip_sha256": "dd10ea1eabd5103f52cc4a7907ee69d4ac2d84eb06742139cb232051090f221a",
+    "note": "Release build and ad hoc signature verification passed in package-app.sh. Personal package still depends on project runtime and models."
+  },
+  "limits": [
+    "All 60 minute performance numbers describe build 5 before punctuation filtering. Build 6 was checked by deterministic replay and regression; model inference was not repeated.",
+    "Raw event replay deliberately leaves 832 translation jobs pending; original endurance translations remain 841/841 completed.",
+    "Runtime hash match in original checks was evaluated before the punctuation fix; package runtime hashes describe the fixed version.",
+    "Model timestamps are estimates; timing format consistency does not prove speech alignment. WER uses five repetitions of one reference, not independent examples.",
+    "Worker CPU excludes Ollama and GPU; RSS is not exclusive GPU memory. Thermal interface reported no recorded warnings and no CPU power status.",
+    "RSS growth slowed but continued. One hour with no swap is not proof of no memory leak or of adequate performance headroom."
+  ]
+}

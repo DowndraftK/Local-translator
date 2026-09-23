@@ -2,6 +2,7 @@
 
 2026-09-17 的完整报告见 [流式字幕与 TED 实测](../../docs/流式字幕与TED实测报告.md)。运行入口和资源准备见 [runtime](../../runtime/README.md)。
 
+- 2026-09-23 的恢复、60 分钟稳定性与纯标点修复证据见 [0.2.2 开发记录](../../docs/0.2.2录音与恢复开发记录.md) 及 [hardening-20260923-results.json](hardening-20260923-results.json)。本次 45 项 Python 回归通过，Swift 沿用 14 项证据；下面的 24/12 项和旧包清单均为 09-17 历史记录。
 - [ted-results.json](ted-results.json)：两轮已完成流式 TED、录后 MLX、真实应用录后双语、PCM 管道输入的紧凑指标，不包含完整原文。
 - [package-manifest.json](package-manifest.json)：0.2.1 构建 4 的应用/ZIP 路径、ZIP 哈希、应用内 Python 代码与工作区一致性的检查记录。
 - `summarize_ted.py`：官方英文稿与完成会话的逐词编辑距离，以及模型估计的字幕延迟。拒绝把未完成会话计入整段结果。
