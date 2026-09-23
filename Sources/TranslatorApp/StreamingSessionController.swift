@@ -26,6 +26,7 @@ struct StreamingSnapshot: Decodable {
     let received_audio_seconds: Double?
     let processed_audio_seconds: Double?
     let asr_queue_seconds: Double?
+    let asr_backlog_seconds: Double?
     let input_kind: String?
     let parent_session_path: String?
     let parent_asr_complete: Bool?
@@ -34,80 +35,9 @@ struct StreamingSnapshot: Decodable {
     let error: String?
     let asr_complete: Bool?
     let translation_counts: [String: Int]?
+    let segment_count: Int?
+    let segment_offset: Int?
     let segments: [StreamingSegment]
-}
-
-/// Audio tap data is copied immediately; conversion and pipe writes use one bounded queue.
-final class MicrophoneCapture: @unchecked Sendable {
-    private let engine = AVAudioEngine()
-    private let queue = DispatchQueue(label: "local.translator.microphone")
-    private let lock = NSLock()
-    private var queuedBuffers = 0
-    private var accepting = false
-    private var writeError = false
-    private var handle: FileHandle?
-    private var converter: PCM16StreamConverter?
-    private var errorHandler: (@Sendable (String) -> Void)?
-
-    func start(handle: FileHandle, onError: @escaping @Sendable (String) -> Void) throws {
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else {
-            throw NSError(domain: "Microphone", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法读取麦克风格式，请检查输入设备。"])
-        }
-        let converter = try PCM16StreamConverter(inputFormat: format)
-        self.handle = handle; self.converter = converter; self.errorHandler = onError
-        accepting = true; writeError = false
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            self.lock.lock()
-            guard self.accepting, !self.writeError else { self.lock.unlock(); return }
-            guard self.queuedBuffers < 24 else {
-                self.writeError = true; self.accepting = false; self.lock.unlock()
-                onError("麦克风发送队列积压，录音已中断。已保存内容可在任务目录中回放。")
-                return
-            }
-            self.queuedBuffers += 1; self.lock.unlock()
-            guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
-                self.failed("无法复制麦克风缓冲。"); return
-            }
-            copy.frameLength = buffer.frameLength
-            let source = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffer.audioBufferList))
-            let target = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
-            for index in 0..<source.count {
-                if let from = source[index].mData, let to = target[index].mData {
-                    memcpy(to, from, Int(source[index].mDataByteSize))
-                }
-            }
-            self.queue.async {
-                defer { self.lock.lock(); self.queuedBuffers -= 1; self.lock.unlock() }
-                do {
-                    let data = try converter.convert(copy)
-                    if !data.isEmpty { try handle.write(contentsOf: data) }
-                } catch { self.failed("麦克风音频发送失败：\(error.localizedDescription)") }
-            }
-        }
-        engine.prepare()
-        do { try engine.start() }
-        catch { input.removeTap(onBus: 0); accepting = false; throw error }
-    }
-
-    private func failed(_ message: String) {
-        lock.lock(); let first = !writeError; writeError = true; accepting = false; lock.unlock()
-        if first { errorHandler?(message) }
-    }
-
-    func stop() {
-        lock.lock(); let wasAccepting = accepting; accepting = false; lock.unlock()
-        if engine.isRunning || wasAccepting { engine.inputNode.removeTap(onBus: 0); engine.stop() }
-        queue.async { [self] in
-            // Drain already copied buffers before signalling EOF to the worker.
-            do {
-                if let tail = try converter?.finish(), !tail.isEmpty { try handle?.write(contentsOf: tail) }
-            } catch { failed("麦克风尾部保存失败：\(error.localizedDescription)") }
-            try? handle?.close(); handle = nil
-        }
-    }
 }
 
 @MainActor final class StreamingSessionController: ObservableObject {
@@ -115,6 +45,9 @@ final class MicrophoneCapture: @unchecked Sendable {
     @Published var folder: URL?
     @Published var busy = false
     @Published var recording = false
+    @Published var paused = false
+    @Published var pauseInProgress = false
+    @Published var recordOnly = false
     @Published var stopping = false
     @Published var status = "导入英语录音，或开始麦克风录音"
     @Published var error: String?
@@ -130,6 +63,22 @@ final class MicrophoneCapture: @unchecked Sendable {
     private var player: AVAudioPlayer?
     private var playbackWatcher: Task<Void, Never>?
     private var userStopped = false
+    private var operationID = UUID()
+    private var microphoneSession = false
+    private var sleepObservers: [NSObjectProtocol] = []
+
+    init() {
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObservers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.pauseRecording(interrupted: true, reason: "电脑即将休眠，录音已暂停；唤醒后请点击继续录音。") }
+        })
+        sleepObservers.append(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.paused, self.busy else { return }
+                self.status = "已唤醒 · 检查麦克风后点击继续录音"
+            }
+        })
+    }
 
     var library: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -137,13 +86,15 @@ final class MicrophoneCapture: @unchecked Sendable {
     }
     var countDescription: String {
         let counts = snapshot?.translation_counts ?? [:]
-        return "英文 \(snapshot?.segments.count ?? 0) 段 · 中文 \(counts["completed"] ?? 0) 段 · 待译 \((counts["pending"] ?? 0) + (counts["running"] ?? 0)) · 失败 \(counts["failed"] ?? 0)"
+        return "英文 \(snapshot?.segment_count ?? snapshot?.segments.count ?? 0) 段 · 中文 \(counts["completed"] ?? 0) 段 · 待译 \((counts["pending"] ?? 0) + (counts["running"] ?? 0)) · 失败 \(counts["failed"] ?? 0)"
     }
 
     func start(input: URL?, resourceRoot: String, model: String, microphone: Bool = false) {
         guard !busy else { return }
         pausePlayback()
-        error = nil; busy = true; userStopped = false; stopping = false
+        let requestID = UUID(); operationID = requestID
+        error = nil; busy = true; userStopped = false; stopping = false; paused = false; pauseInProgress = false
+        microphoneSession = microphone
         status = microphone ? "正在请求麦克风权限…" : "正在创建录音任务…"
         Task {
             do {
@@ -151,7 +102,7 @@ final class MicrophoneCapture: @unchecked Sendable {
                     let granted = await AVCaptureDevice.requestAccess(for: .audio)
                     guard granted else { throw failure("麦克风权限未开启。可在系统设置 → 隐私与安全性 → 麦克风中允许本应用。") }
                 }
-                guard !userStopped else { busy = false; status = "已取消"; return }
+                guard operationID == requestID, !userStopped else { return }
                 try FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
                 let destination = library.appendingPathComponent(UUID().uuidString, isDirectory: true)
                 try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
@@ -165,15 +116,19 @@ final class MicrophoneCapture: @unchecked Sendable {
                     "device": useCPU ? "cpu" : "mps", "dtype": "float32", "max_context_tokens": 128]
                 let configURL = destination.appendingPathComponent("runtime.json")
                 try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]).write(to: configURL, options: .atomic)
-                var args = ["run", "--config", configURL.path, "--session", destination.path,
+                let onlyRecord = microphone && recordOnly
+                var args = [onlyRecord ? "record" : "run", "--config", configURL.path, "--session", destination.path,
                             "--translation-model", model]
                 if !translationEnabled { args.append("--no-translation") }
-                if microphone { args.append("--stdin-pcm") }
+                if microphone { if !onlyRecord { args.append("--stdin-pcm") } }
                 else if let input { args += ["--input", input.path] }
                 else { throw failure("请先选择录音。") }
                 if paced && !microphone { args.append("--paced") }
                 try launch(args, project: project, microphoneRequested: microphone)
-            } catch { self.error = error.localizedDescription; busy = false }
+            } catch {
+                guard operationID == requestID else { return }
+                self.error = error.localizedDescription; busy = false; stopping = false
+            }
         }
     }
 
@@ -188,6 +143,7 @@ final class MicrophoneCapture: @unchecked Sendable {
             throw failure("未找到流式运行环境。请按项目 runtime/README.md 准备 Python 环境并重新打包应用。")
         }
         let child = Process()
+        let launchID = UUID(); operationID = launchID
         child.executableURL = python
         child.arguments = ["-m", "streaming_translator"] + arguments
         child.currentDirectoryURL = project
@@ -204,8 +160,9 @@ final class MicrophoneCapture: @unchecked Sendable {
         child.terminationHandler = { [weak self] child in
             try? log.close()
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.process === child else { return }
                 self.microphone?.stop(); self.microphone = nil; self.recording = false
+                self.paused = false; self.pauseInProgress = false; self.microphoneSession = false
                 self.inputPipe = nil; self.process = nil; self.busy = false; self.stopping = false
                 self.watcher?.cancel(); self.watcher = nil; self.refresh()
                 self.status = self.statusDescription()
@@ -217,18 +174,32 @@ final class MicrophoneCapture: @unchecked Sendable {
         }
         process = child; busy = true; stopping = false; status = "正在校验资源并加载模型…"
         do { try child.run() }
-        catch { process = nil; busy = false; try? log.close(); throw error }
+        catch {
+            process = nil; busy = false; try? log.close()
+            try? inputPipe?.fileHandleForWriting.close(); inputPipe = nil
+            self.error = error.localizedDescription
+            throw error
+        }
         watcher = Task { @MainActor [self] in
-            while !Task.isCancelled {
+            while !Task.isCancelled && self.operationID == launchID {
                 self.refresh()
                 self.status = self.statusDescription()
-                if microphoneRequested && self.snapshot?.state == "recognizing" && self.microphone == nil && !self.userStopped {
+                if microphoneRequested && ["recognizing", "recording"].contains(self.snapshot?.state ?? "") && self.microphone == nil && !self.userStopped && !self.paused {
                     do {
                         guard let handle = self.inputPipe?.fileHandleForWriting else { break }
-                        let capture = MicrophoneCapture()
-                        try capture.start(handle: handle) { [weak self] message in
-                            Task { @MainActor in self?.error = message; self?.stop() }
-                        }
+                        let capture = MicrophoneCapture(handle: handle, journal: folder.appendingPathComponent("capture-events.jsonl"),
+                            onError: { [weak self] message in
+                                Task { @MainActor in
+                                    guard let self, self.operationID == launchID else { return }
+                                    self.error = message; self.stop()
+                                }
+                            }, onInterruption: { [weak self] in
+                                Task { @MainActor in
+                                    guard let self, self.operationID == launchID else { return }
+                                    self.pauseRecording(interrupted: true, reason: "麦克风设备发生变化，录音已暂停。请检查设备并点击继续录音。")
+                                }
+                            })
+                        try capture.start()
                         self.microphone = capture; self.recording = true
                     } catch { self.error = error.localizedDescription; self.stop() }
                 }
@@ -244,19 +215,22 @@ final class MicrophoneCapture: @unchecked Sendable {
     }
     private func statusDescription() -> String {
         if stopping { return snapshot?.state == "refining" ? "正在停止 · 等待当前校对保存后退出…" : "正在停止输入并保存尾句…" }
-        if !busy, ["preparing", "loading", "recognizing", "finishing_asr", "translating", "refining"].contains(snapshot?.state ?? "") {
-            return "上次保存时任务尚未完成；可查看英文并继续补译"
+        if paused { return pauseInProgress ? "正在保存暂停前的录音…" : "录音已暂停 · 点击继续录音恢复" }
+        if !busy, ["preparing", "loading", "recognizing", "recording", "finishing_asr", "translating", "refining"].contains(snapshot?.state ?? "") {
+            return "上次任务中断；可继续识别已保存录音或补译已有英文"
         }
         switch snapshot?.state {
         case "preparing": return "正在保存录音并准备资源…"
         case "loading": return "正在加载语音模型…"
         case "refining": return "正在根据完整录音重新校对英文 · 原版字幕保留"
         case "recognizing": return recording ? "正在录音 · 英文先保存，中文随后显示" : "正在识别 · 英文先保存，中文随后显示"
+        case "recording": return "仅录音 · 正在保存，稍后可继续识别"
+        case "recorded": return "录音已保存 · 点击继续识别生成字幕"
         case "finishing_asr": return "正在提交录音末尾…"
         case "translating": return "英文已保存，正在补齐中文…"
         case "completed": return "本次处理完成"
         case "needs_translation": return "英文已保存；部分中文失败，可继续补译"
-        case "incomplete_asr": return "已补译保存的英文；识别未完成的部分需要重新处理原录音"
+        case "incomplete_asr": return "识别尚未完成 · 点击继续识别处理已保存录音"
         case "failed": return "任务未完成；已保存内容仍可查看"
         case "stopped": return "已停止；可继续补译已保存英文"
         default: return status
@@ -265,6 +239,11 @@ final class MicrophoneCapture: @unchecked Sendable {
     func stop() {
         guard busy, !stopping else { return }
         userStopped = true; stopping = true; status = "正在停止输入并保存尾句…"
+        if process == nil {
+            operationID = UUID(); busy = false; stopping = false; paused = false
+            microphoneSession = false; status = "已取消"
+            return
+        }
         if let microphone {
             // EOF follows the capture queue's final copied buffer. Do not interrupt
             // the reader before those samples have been archived by the worker.
@@ -272,6 +251,57 @@ final class MicrophoneCapture: @unchecked Sendable {
             return
         } else if let inputPipe { try? inputPipe.fileHandleForWriting.close() }
         if let process, process.isRunning { process.terminate() }
+    }
+
+    func pauseRecording(interrupted: Bool = false, reason: String? = nil) {
+        guard busy, microphoneSession, !paused, !stopping else { return }
+        paused = true; recording = false
+        if let reason { error = reason }
+        guard let microphone else { return }
+        pauseInProgress = true
+        let current = operationID
+        microphone.pause(interrupted: interrupted) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.operationID == current else { return }
+                self.pauseInProgress = false
+            }
+        }
+    }
+
+    func resumeRecording() {
+        guard busy, paused, !pauseInProgress, !stopping else { return }
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+            error = "麦克风权限已关闭，请在系统设置 → 隐私与安全性 → 麦克风中允许后继续。"; return
+        }
+        do {
+            try microphone?.start()
+            paused = false; recording = microphone != nil; error = nil
+        } catch {
+            self.error = error.localizedDescription
+            // Drain failed start state before permitting another resume attempt.
+            paused = false
+            pauseRecording(interrupted: true)
+        }
+    }
+
+    func resumeASR(resourceRoot: String) {
+        guard !busy, let folder, snapshot?.asr_complete != true else { return }
+        error = nil; userStopped = false
+        do { try launch(["resume", "--session", folder.path],
+                        project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()) }
+        catch { self.error = error.localizedDescription }
+    }
+
+    func showPage(offset: Int?, resourceRoot: String) {
+        guard let folder else { return }
+        do {
+            let request: [String: Any] = ["offset": offset.map { $0 as Any } ?? NSNull()]
+            try JSONSerialization.data(withJSONObject: request).write(to: folder.appendingPathComponent("view.json"), options: .atomic)
+            if !busy {
+                try launch(["page", "--session", folder.path],
+                           project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent())
+            }
+        } catch { self.error = error.localizedDescription }
     }
     func openSession() {
         guard !busy else { return }

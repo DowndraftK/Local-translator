@@ -26,6 +26,7 @@ struct StreamingAudioWorkspace: View {
             HStack {
                 Toggle("按原速回放输入", isOn: $controller.paced).toggleStyle(.checkbox)
                 Toggle("同时翻译中文", isOn: $controller.translationEnabled).toggleStyle(.checkbox)
+                Toggle("仅录音，稍后识别", isOn: $controller.recordOnly).toggleStyle(.checkbox)
                 Picker("解码", selection: $controller.useCPU) {
                     Text("Mac GPU").tag(false); Text("CPU 对照").tag(true)
                 }.frame(width: 175)
@@ -36,6 +37,11 @@ struct StreamingAudioWorkspace: View {
                 if let input { Text(input.lastPathComponent).lineLimit(1).font(.system(size: 12)).foregroundStyle(.secondary) }
                 Spacer()
                 if controller.busy {
+                    if controller.recording || controller.paused {
+                        Button(controller.paused ? "继续录音" : "暂停录音") {
+                            if controller.paused { controller.resumeRecording() } else { controller.pauseRecording() }
+                        }.disabled(controller.stopping || controller.pauseInProgress)
+                    }
                     Button("停止并保存") { controller.stop() }.tint(.red).disabled(controller.stopping)
                 } else {
                     Button { controller.start(input: nil, resourceRoot: state.resourceRoot, model: state.model, microphone: true) } label: {
@@ -50,7 +56,7 @@ struct StreamingAudioWorkspace: View {
                 if controller.busy { ProgressView().controlSize(.small) }
                 Text(controller.status).font(.system(size: 12, weight: .medium))
                 Spacer()
-                if let backlog = controller.snapshot?.asr_queue_seconds, controller.busy, backlog > 2 {
+                if let backlog = controller.snapshot?.asr_backlog_seconds, controller.busy, backlog > 2 {
                     Text("待识别 \(Int(backlog)) 秒").font(.system(size: 12)).foregroundStyle(.orange)
                 }
                 if let seconds = controller.snapshot?.received_audio_seconds {
@@ -74,7 +80,7 @@ struct StreamingAudioWorkspace: View {
                     VStack(spacing: 12) {
                         Image(systemName: "waveform").font(.system(size: 35)).foregroundStyle(.secondary)
                         Text(controller.snapshot?.input_kind == "refinement" && controller.busy ? "正在校对完整录音" : controller.busy ? "正在准备连续识别" : "英文先显示，中文随后补齐").font(.headline)
-                        Text("录音和确认的英文会保存到本机任务目录。\n中途关闭后，可打开任务继续补译。")
+                        Text("录音和确认的英文会保存到本机任务目录。\n中途关闭后，可继续识别已保存录音或补译。")
                             .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -116,6 +122,20 @@ struct StreamingAudioWorkspace: View {
                 }
             }
 
+            if let total = controller.snapshot?.segment_count, total > 200 {
+                HStack {
+                    let offset = controller.snapshot?.segment_offset ?? 0
+                    Button("较早字幕") { controller.showPage(offset: max(0, offset-200), resourceRoot: state.resourceRoot) }
+                        .disabled(offset == 0)
+                    Text("显示 \(offset+1)–\(min(total, offset+(controller.snapshot?.segments.count ?? 0))) / \(total) 段")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("较新字幕") { controller.showPage(offset: min(max(0, total-200), offset+200), resourceRoot: state.resourceRoot) }
+                        .disabled(offset+200 >= total)
+                    Button("跟随最新") { controller.showPage(offset: nil, resourceRoot: state.resourceRoot) }
+                    Spacer()
+                }
+            }
+
             HStack {
                 Text(controller.countDescription).font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
@@ -123,6 +143,8 @@ struct StreamingAudioWorkspace: View {
                 Picker("倍速", selection: $controller.playbackRate) {
                     Text("0.75×").tag(Float(0.75)); Text("1×").tag(Float(1)); Text("1.25×").tag(Float(1.25)); Text("1.5×").tag(Float(1.5))
                 }.frame(width: 115)
+                Button("继续识别") { controller.resumeASR(resourceRoot: state.resourceRoot) }
+                    .disabled(controller.busy || state.busy || controller.snapshot?.audio_path == nil || controller.snapshot?.asr_complete == true)
                 Button("继续补译 / 重试失败") { controller.retry(resourceRoot: state.resourceRoot) }
                     .disabled(controller.busy || state.busy || controller.folder == nil)
                 Button("录后重新校对") { controller.refine(resourceRoot: state.resourceRoot) }
