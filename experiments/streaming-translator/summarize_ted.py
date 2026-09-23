@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import statistics
+import sqlite3
 from pathlib import Path
 
 
@@ -45,8 +46,33 @@ def percentile(values, fraction):
     return values[min(len(values)-1, int((len(values)-1)*fraction))] if values else None
 
 
+def load_snapshot(session):
+    # UI snapshots intentionally contain only one page. Evaluation reads all
+    # committed rows in a single read-only database transaction.
+    database = session/'session.sqlite'
+    if not database.exists():
+        return json.loads((session/'snapshot.json').read_text())
+    with sqlite3.connect(database.resolve().as_uri()+'?mode=ro', uri=True) as db:
+        db.row_factory = sqlite3.Row
+        db.execute('BEGIN')
+        snapshot = {r['key']: json.loads(r['value']) for r in db.execute('SELECT * FROM metadata')}
+        snapshot['segments'] = [dict(r) for r in db.execute("""SELECT s.*,t.state AS translation_state,
+            t.chinese,t.error AS translation_error,t.completed_at AS translated_at
+            FROM segments s JOIN translations t ON t.segment_id=s.id ORDER BY s.id""")]
+        counts = dict(db.execute('SELECT state,COUNT(*) FROM translations GROUP BY state'))
+        snapshot['translation_counts'] = {s: counts.get(s, 0) for s in ['pending','running','completed','failed','disabled']}
+        snapshot['pending_english'] = ''.join(t['text'] for t in snapshot.pop('pending_tokens', [])).strip()
+        snapshot['segment_count'] = len(snapshot['segments'])
+    return snapshot
+
+
+def lag_summary(values):
+    return {'median': statistics.median(values) if values else None,
+            'p95': percentile(values, .95), 'max': max(values, default=None)}
+
+
 def summarize(session, reference):
-    snapshot = json.loads((session/'snapshot.json').read_text())
+    snapshot = load_snapshot(session)
     if snapshot.get('state') != 'completed':
         raise ValueError(f'Trial incomplete: {session} ({snapshot.get("state")})')
     segments = snapshot['segments']
@@ -63,12 +89,12 @@ def summarize(session, reference):
         coalesce_seconds=snapshot['asr_config']['asr_coalesce_min_s'],
         boundary_counts=dict(Counter(s['boundary'] for s in segments)),
         snapshot_sha256=hashlib.sha256((session/'snapshot.json').read_bytes()).hexdigest(),
-        first_english_segment_seconds=min(s['committed_at'] for s in segments)-start,
-        first_chinese_segment_seconds=min(s['translated_at'] for s in segments if s['chinese'])-start,
+        first_english_segment_seconds=min((s['committed_at']-start for s in segments), default=None),
+        first_chinese_segment_seconds=min((s['translated_at']-start for s in segments if s['chinese']), default=None),
         word_comparison=word_errors(reference, hypothesis),
-        estimated_english_end_lag={'median': statistics.median(english_lags), 'p95': percentile(english_lags, .95), 'max': max(english_lags)},
-        estimated_chinese_end_lag={'median': statistics.median(chinese_lags), 'p95': percentile(chinese_lags, .95), 'max': max(chinese_lags)},
-        translation_after_english={'median': statistics.median(translations), 'p95': percentile(translations, .95), 'max': max(translations)},
+        estimated_english_end_lag=lag_summary(english_lags),
+        estimated_chinese_end_lag=lag_summary(chinese_lags),
+        translation_after_english=lag_summary(translations),
         all_input_received=snapshot['input_samples'] == snapshot['received_pcm_samples'],
         empty_pending_english=not snapshot.get('pending_english'))
     return summary
