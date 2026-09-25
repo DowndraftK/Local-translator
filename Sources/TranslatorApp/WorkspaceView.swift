@@ -100,7 +100,7 @@ struct WorkspaceView: View {
             }
             HStack(spacing: 9) {
                 if state.busy { ProgressView().controlSize(.small) }
-                Text(state.activity ?? state.notice).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(state.activity ?? (state.textTask.busy ? state.textTask.job?.summary : nil) ?? state.notice).font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
                 if state.busy { Button("停止", role: .cancel) { state.cancel() }.controlSize(.small) }
                 if let folder = state.lastWorkFolder {
@@ -155,12 +155,20 @@ private struct DirectionPicker: View {
 struct TextWorkspace: View {
     @EnvironmentObject var state: AppState
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             HStack {
                 DirectionPicker()
                 Spacer()
                 Button("粘贴") { state.paste() }.disabled(state.busy)
                 Button("试用示例") { state.source = "Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance."; state.direction = "en-zh" }.disabled(state.busy)
+            }
+            if let job = state.textTask.job {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(job.summary).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
+                    ProgressView(value: Double(job.count(.completed)), total: Double(max(1, job.segments.count)))
+                        .accessibilityLabel("已完成段落比例")
+                    if let error = job.error { Text(error).font(.system(size: 11)).foregroundStyle(.orange).textSelection(.enabled) }
+                }
             }
             HStack(alignment: .top, spacing: 16) {
                 Card {
@@ -168,11 +176,11 @@ struct TextWorkspace: View {
                         HStack {
                             Text("原文").font(.system(size: 13, weight: .semibold))
                             Spacer()
-                            Text("\(state.source.count) / 8000").font(.system(size: 11, design: .monospaced)).foregroundStyle(state.source.count > 8000 ? .red : .secondary)
+                            Text("\(state.source.count) 字符 · 自动分段").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                         }.padding(17)
                         Divider()
                         ZStack(alignment: .topLeading) {
-                            if state.source.isEmpty { Text("在这里输入或粘贴需要翻译的文字…").foregroundStyle(.tertiary).padding(.horizontal, 21).padding(.top, 20) }
+                            if state.source.isEmpty { Text("在这里输入或粘贴需要翻译的整篇文章…").foregroundStyle(.tertiary).padding(.horizontal, 21).padding(.top, 20) }
                             TextEditor(text: $state.source).font(.system(size: 15)).lineSpacing(7)
                                 .scrollContentBackground(.hidden).padding(13).disabled(state.busy).accessibilityLabel("输入原文")
                         }
@@ -181,36 +189,48 @@ struct TextWorkspace: View {
                 Card {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
-                            Text("译文").font(.system(size: 13, weight: .semibold))
+                            Text("逐段对照").font(.system(size: 13, weight: .semibold))
                             Spacer()
-                            if let result = state.translation {
-                                Text(String(format: "%.2f 秒", result.elapsedSeconds)).font(.system(size: 11, design: .monospaced)).foregroundStyle(accent)
-                                Button { state.copy(result.translation) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.plain).accessibilityLabel("复制译文")
-                            }
+                            Button("复制已有译文") { state.copyTextTranslation() }
+                                .disabled((state.textTask.job?.count(.completed) ?? 0) == 0)
                         }.padding(17)
                         Divider()
-                        if let result = state.translation {
+                        if let job = state.textTask.job, !job.segments.isEmpty {
                             ScrollView {
-                                VStack(alignment: .leading, spacing: 18) {
-                                    Text(result.translation).font(.system(size: 15)).lineSpacing(7).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                                    ForEach(result.warnings, id: \.self) { ReviewHint(text: $0) }
+                                LazyVStack(alignment: .leading, spacing: 18) {
+                                    ForEach(job.segments) { segment in
+                                        VStack(alignment: .leading, spacing: 10) {
+                                            HStack {
+                                                Text("第 \(segment.id + 1) 段 · \(segment.state.label)")
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                if segment.state == .processing { ProgressView().controlSize(.small) }
+                                            }
+                                            Text(segment.source).font(.system(size: 12)).foregroundStyle(.secondary)
+                                            if let result = segment.result {
+                                                Text(result.translation).font(.system(size: 15)).lineSpacing(6)
+                                                ForEach(result.warnings, id: \.self) { ReviewHint(text: $0) }
+                                            }
+                                            if let error = segment.error { Text(error).font(.system(size: 12)).foregroundStyle(.orange) }
+                                        }.frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                                        Divider()
+                                    }
                                 }.padding(20)
                             }
                         } else {
-                            EmptyWorkspace(symbol: "character.bubble", title: state.busy ? "正在本机处理中" : "译文将显示在这里", message: state.busy ? "首次请求可能需要先加载模型。" : "选择翻译方向，然后点击「开始翻译」。")
+                            EmptyWorkspace(symbol: "character.bubble", title: state.textTask.busy ? "正在准备分段" : "译文将逐段显示在这里", message: "每段完整生成后显示。首次请求可能需要加载模型。")
                         }
                     }
                 }
             }
             HStack {
-                ReviewHint(text: "M0 每次最多 8000 字符。日期、否定和条件关系请对照原文核对。")
+                ReviewHint(text: "结果仅保留于当前窗口，请主动复制或导出。重新开始会完整重译。日期、否定和条件请核对原文。")
                 Spacer()
-                if let result = state.translation {
-                    Button("保存对照") { state.saveText("原文\n\(result.source)\n\n译文\n\(result.translation)", name: "文字翻译.txt") }
+                Button("导出双语 TXT") { state.exportTextTranslation() }.disabled(state.textTask.job == nil)
+                Button { state.translateText() } label: {
+                    Label(state.textTask.job == nil ? "开始翻译" : "重新开始", systemImage: "arrow.right").padding(.horizontal, 8)
                 }
-                Button { state.translateText() } label: { Label("开始翻译", systemImage: "arrow.right").padding(.horizontal, 8) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                    .disabled(state.busy || state.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.source.count > 8000)
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .disabled(state.busy || state.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -381,7 +401,7 @@ struct ResourceWorkspace: View {
                     Text("本地翻译器 · M0 交互测试版").font(.system(size: 14, weight: .medium))
                     Text("适用于这台 Apple Silicon Mac，macOS 26 或更新版本。\n应用包复用本机 Ollama 和语音模型；移动应用无需复制权重，移动模型后请重新选择资源目录。")
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(5)
-                    ReviewHint(text: "连续识别的录音任务保存在本机 Application Support/LocalTranslator/Recordings，可打开任务继续补译。文字、文档与原生引擎对照仍使用临时目录。")
+                    ReviewHint(text: "连续识别的录音任务保存在本机 Application Support/LocalTranslator/Recordings，可打开任务继续补译。文字结果仅保留于当前窗口，请主动复制或导出；文档与原生引擎对照使用临时目录。")
                     if let folder = state.lastWorkFolder { Button("打开本次测试目录") { NSWorkspace.shared.open(folder) } }
                 }
             }.padding(1)

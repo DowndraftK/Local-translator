@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Combine
 import SwiftUI
 import TranslatorCore
 import UniformTypeIdentifiers
@@ -19,10 +20,11 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
 
 @MainActor final class AppState: ObservableObject {
     @Published var page: WorkspacePage = .text
-    @Published var model = "hy-mt2:1.8b-q8"
-    @Published var direction = "en-zh" { didSet { if oldValue != direction { translation = nil; documentTranslations = [:] } } }
-    @Published var source = "" { didSet { if oldValue != source { translation = nil } } }
-    @Published var translation: TranslationRecord?
+    @Published var model = "hy-mt2:1.8b-q8" { didSet { if oldValue != model { invalidateTextResult() } } }
+    @Published var direction = "en-zh" { didSet { if oldValue != direction { invalidateTextResult(); documentTranslations = [:] } } }
+    @Published var source = "" { didSet { if oldValue != source { invalidateTextResult() } } }
+    let textTask = TextTranslationController()
+    private var textObservation: AnyCancellable?
     @Published var activity: String?
     @Published var error: String?
     @Published var notice = "准备就绪"
@@ -50,12 +52,14 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     init() {
         resourceRoot = UserDefaults.standard.string(forKey: "speechResourceRoot")
             ?? Bundle.main.object(forInfoDictionaryKey: "M0ResourceRoot") as? String ?? ""
+        textObservation = textTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         if let index = CommandLine.arguments.firstIndex(of: "--open-recording-session"), index + 1 < CommandLine.arguments.count {
             page = .audio
             streaming.loadSession(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
         }
     }
-    var busy: Bool { activity != nil }
+    var busy: Bool { activity != nil || textTask.busy }
+    private func invalidateTextResult() { if !textTask.busy { textTask.clear() } }
     var chosenBlock: TextBlock? { document?.blocks.first { $0.id == selectedBlock } }
     var selectedTranslation: TranslationRecord? { selectedBlock.flatMap { documentTranslations[$0] } }
     func sourceLabel(for block: TextBlock) -> String {
@@ -137,10 +141,14 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         streaming.stop()
         streaming.pausePlayback()
         operation?.cancel()
+        textTask.stop()
         if let process = serverProcess, process.isRunning { process.terminate() }
         try? serverLog?.close()
     }
-    func cancel() { operation?.cancel(); notice = "正在停止，已完成的录音片段仍可导出" }
+    func cancel() {
+        if textTask.busy { textTask.stop(); notice = "已停止；已完成段可复制，全部原文可导出" }
+        else { operation?.cancel(); notice = "正在停止，已完成结果仍可导出" }
+    }
 
     private func makeWorkFolder() throws -> URL {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("LocalTranslator-M0", isDirectory: true)
@@ -165,10 +173,30 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     }
 
     func translateText() {
-        let input = source, selectedModel = model, selectedDirection = direction
-        translation = nil
-        perform("正在翻译…") { folder in
-            self.translation = try await self.translate(input, model: selectedModel, direction: selectedDirection, folder: folder)
+        guard !busy else { return }
+        error = nil; notice = "文字结果仅保留于当前窗口，请主动复制或导出"
+        do {
+            let engine = try OllamaEngine()
+            textTask.start(source: source, model: model, direction: direction) { input, model, direction in
+                try await withTaskCancellationHandler {
+                    try await engine.translate(input, model: model, direction: direction)
+                } onCancel: { engine.cancelRequests() }
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+    func copyTextTranslation() {
+        guard let snapshot = textTask.job else { return }
+        Task {
+            let text = await Task.detached { snapshot.completedTranslation }.value
+            copy(text)
+            notice = "已复制当前完成段的译文"
+        }
+    }
+    func exportTextTranslation() {
+        guard let snapshot = textTask.job else { return }
+        Task {
+            let text = await Task.detached { snapshot.bilingualText }.value
+            saveText(text, name: "文字双语对照.txt")
         }
     }
     private func translate(_ source: String, model: String, direction: String, folder: URL) async throws -> TranslationRecord {

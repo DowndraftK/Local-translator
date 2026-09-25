@@ -37,7 +37,7 @@ app=Path(sys.argv[1]); project=Path(sys.argv[2])
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.2', 'CFBundleVersion':'6',
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.3', 'CFBundleVersion':'7',
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -59,11 +59,13 @@ codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
 cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.2 录音与恢复测试版
+本地翻译器 — 0.2.3 纯文本长文翻译测试版
 
 双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
 应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
-录音页面新增主动麦克风输入、英文先显示、独立中文队列、保存任务、补译/失败重试、按片段回放、英文纠错和 TXT/SRT/VTT 导出。
+文字页面支持超过 8,000 字符的文章自动分段、逐段对照、完整进度、停止、复制已有译文和双语 TXT 导出。
+文字结果仅保留于当前窗口，退出后不恢复；请主动复制或导出。停止后重新开始会从头翻译，不提供续跑或单段重试。
+录音页面提供主动麦克风输入、英文先显示、独立中文队列、保存任务、补译/失败重试、按片段回放、英文纠错和 TXT/SRT/VTT 导出。
 “录后重新校对”根据完整保存的录音生成独立新版本并翻译，保留原字幕以便比较。长录音的流式结果可能漏词，建议录后校对再复核。
 麦克风仅在点击开始并允许系统权限后采集；真人麦克风质量仍需实际验收。
 
@@ -78,7 +80,7 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 新的录音任务保存在 ~/Library/Application Support/LocalTranslator/Recordings。可暂停/继续录音；设备变化或休眠会暂停，请手动继续。
 “仅录音，稍后识别”可先保存音频；中断任务可点击“继续识别”，从最近已保存的安全位置重做尾部。若没有检查点，会从头识别；旧尾部保存在数据库恢复记录中。
 超过 200 段的字幕可分页浏览，导出始终包含全部段落。
-文字、文档及原生引擎对照仍使用各自的临时测试目录。
+文档及原生引擎对照仍使用各自的临时测试目录。
 TXT
 ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$output_root/本地翻译器-M0.zip"
 printf '应用：%s\n压缩包：%s/本地翻译器-M0.zip\n' "$app_bundle" "$output_root"
