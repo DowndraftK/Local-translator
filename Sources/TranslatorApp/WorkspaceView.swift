@@ -83,7 +83,7 @@ struct WorkspaceView: View {
     private var subtitle: String {
         switch state.page {
         case .text: return "粘贴原文，查看中英对照，保留重要细节。"
-        case .documents: return "从文档或图片提取文字，选择段落进行翻译。"
+        case .documents: return "文字型 PDF 整篇翻译、按页双语阅读；保留图片与 Office 选段入口。"
         case .audio: return "导入英语录音，查看带时间轴的双语片段。"
         case .settings: return "检查本机服务和已有模型的位置。"
         }
@@ -100,7 +100,7 @@ struct WorkspaceView: View {
             }
             HStack(spacing: 9) {
                 if state.busy { ProgressView().controlSize(.small) }
-                Text(state.activity ?? (state.textTask.busy ? state.textTask.job?.summary : nil) ?? state.notice).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(state.activity ?? (state.textTask.busy ? state.textTask.job?.summary : nil) ?? (state.documentTask.busy ? "正在处理文档；可继续阅读，详细进度见文档页" : nil) ?? state.notice).font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
                 if state.busy { Button("停止", role: .cancel) { state.cancel() }.controlSize(.small) }
                 if let folder = state.lastWorkFolder {
@@ -142,7 +142,7 @@ private struct ReviewHint: View {
     }
 }
 
-private struct DirectionPicker: View {
+struct DirectionPicker: View {
     @EnvironmentObject var state: AppState
     var body: some View {
         Picker("翻译方向", selection: $state.direction) {
@@ -236,7 +236,7 @@ struct TextWorkspace: View {
     }
 }
 
-struct DocumentWorkspace: View {
+struct LegacyDocumentWorkspace: View {
     @EnvironmentObject var state: AppState
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -275,9 +275,9 @@ struct DocumentWorkspace: View {
                                     HStack {
                                         DirectionPicker()
                                         Spacer()
-                                        Button("翻译所选段落") { state.translateBlock() }.buttonStyle(.borderedProminent).disabled(state.busy || block.text.count > 8000)
+                                        Button("翻译所选段落") { state.translateBlock() }.buttonStyle(.borderedProminent).disabled(state.busy || block.text.utf8.count > TranslationBudget.sourceBytes)
                                     }
-                                    if block.text.count > 8000 { ReviewHint(text: "此片段超过 8000 字符，请复制较短内容到文字翻译页。") }
+                                    if block.text.utf8.count > TranslationBudget.sourceBytes { ReviewHint(text: "此片段超过 2,048 UTF-8 字节单次预算，请复制到文字翻译页自动分段。") }
                                     if let result = state.selectedTranslation {
                                         Text(result.translation).font(.system(size: 15)).lineSpacing(6).textSelection(.enabled)
                                         ForEach(result.warnings, id: \.self) { ReviewHint(text: $0) }

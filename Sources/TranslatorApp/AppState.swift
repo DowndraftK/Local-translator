@@ -20,10 +20,16 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
 
 @MainActor final class AppState: ObservableObject {
     @Published var page: WorkspacePage = .text
-    @Published var model = "hy-mt2:1.8b-q8" { didSet { if oldValue != model { invalidateTextResult() } } }
-    @Published var direction = "en-zh" { didSet { if oldValue != direction { invalidateTextResult(); documentTranslations = [:] } } }
+    @Published var model = "hy-mt2:1.8b-q8" { didSet { if oldValue != model { invalidateTextResult(); invalidateDocumentResult() } } }
+    @Published var direction = "en-zh" { didSet { if oldValue != direction { invalidateTextResult(); invalidateDocumentResult(); documentTranslations = [:] } } }
     @Published var source = "" { didSet { if oldValue != source { invalidateTextResult() } } }
     let textTask = TextTranslationController()
+    let documentTask = DocumentTranslationController()
+    private var documentObservation: AnyCancellable?
+    @Published var wholeDocument = true
+    @Published var allDocumentPages = true
+    @Published var rangeFirst = "1"
+    @Published var rangeLast = "1"
     private var textObservation: AnyCancellable?
     @Published var activity: String?
     @Published var error: String?
@@ -52,13 +58,17 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     init() {
         resourceRoot = UserDefaults.standard.string(forKey: "speechResourceRoot")
             ?? Bundle.main.object(forInfoDictionaryKey: "M0ResourceRoot") as? String ?? ""
+        documentObservation = documentTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         textObservation = textTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         if let index = CommandLine.arguments.firstIndex(of: "--open-recording-session"), index + 1 < CommandLine.arguments.count {
             page = .audio
             streaming.loadSession(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
         }
     }
-    var busy: Bool { activity != nil || textTask.busy }
+    var busy: Bool { activity != nil || textTask.busy || documentTask.busy }
+    private func invalidateDocumentResult() {
+        if !documentTask.busy, let url = documentURL, wholeDocument { documentTask.load(url) }
+    }
     private func invalidateTextResult() { if !textTask.busy { textTask.clear() } }
     var chosenBlock: TextBlock? { document?.blocks.first { $0.id == selectedBlock } }
     var selectedTranslation: TranslationRecord? { selectedBlock.flatMap { documentTranslations[$0] } }
@@ -142,11 +152,13 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         streaming.pausePlayback()
         operation?.cancel()
         textTask.stop()
+        documentTask.stop()
         if let process = serverProcess, process.isRunning { process.terminate() }
         try? serverLog?.close()
     }
     func cancel() {
-        if textTask.busy { textTask.stop(); notice = "已停止；已完成段可复制，全部原文可导出" }
+        if documentTask.busy { documentTask.stop(); notice = "文档已停止；已有原文和完成译文可导出" }
+        else if textTask.busy { textTask.stop(); notice = "已停止；已完成段可复制，全部原文可导出" }
         else { operation?.cancel(); notice = "正在停止，已完成结果仍可导出" }
     }
 
@@ -214,8 +226,11 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         panel.title = "选择文档或图片"; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "heic", "tif", "tiff"].compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        documentTask.clear(); document = nil; selectedBlock = nil; documentTranslations = [:]
         documentURL = url
-        extractDocument()
+        wholeDocument = ["pdf", "txt"].contains(url.pathExtension.lowercased())
+        allDocumentPages = true; rangeFirst = "1"; rangeLast = "1"
+        if wholeDocument { documentTask.load(url) } else { extractDocument() }
     }
     func extractDocument() {
         guard let url = documentURL else { return }
@@ -230,8 +245,36 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
             self.document = result; self.selectedBlock = result.blocks.first?.id
         }
     }
+    func extractWholeDocument() {
+        guard !busy else { return }
+        let first = allDocumentPages || !documentTask.isPDF ? 1 : Int(rangeFirst) ?? 0
+        let last = allDocumentPages || !documentTask.isPDF ? documentTask.totalPages : Int(rangeLast) ?? 0
+        documentTask.extract(first: first, last: last, model: model, direction: direction)
+    }
+    func translateWholeDocument() {
+        guard !busy else { return }
+        do {
+            let engine = try OllamaEngine()
+            documentTask.start { input, model, direction in
+                try await withTaskCancellationHandler {
+                    try await engine.translate(input, model: model, direction: direction)
+                } onCancel: { engine.cancelRequests() }
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+    func exportDocumentTranslation(copyOnly: Bool = false) {
+        guard let snapshot = documentTask.snapshot else { return }
+        let translation = documentTask.translator.job
+        Task {
+            let text = await Task.detached {
+                copyOnly ? translation?.completedTranslation ?? "" : snapshot.export(translation: translation)
+            }.value
+            if copyOnly { copy(text); notice = "已复制当前完成译文" }
+            else { saveText(text, name: snapshot.file + "-双语.txt") }
+        }
+    }
     func translateBlock() {
-        guard let block = chosenBlock else { return }
+        guard let block = chosenBlock, block.text.utf8.count <= TranslationBudget.sourceBytes else { return }
         let selectedModel = model, selectedDirection = direction
         perform("正在翻译所选段落…") { folder in
             let result = try await self.translate(block.text, model: selectedModel, direction: selectedDirection, folder: folder)
@@ -289,8 +332,12 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     func saveText(_ text: String, name: String) {
         let panel = NSSavePanel(); panel.nameFieldStringValue = name; panel.allowedContentTypes = [.plainText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { try text.write(to: url, atomically: true, encoding: .utf8); notice = "已保存：\(url.lastPathComponent)" }
-        catch { self.error = error.localizedDescription }
+        Task {
+            do {
+                try await Task.detached { try text.write(to: url, atomically: true, encoding: .utf8) }.value
+                notice = "已保存：\(url.lastPathComponent)"
+            } catch { self.error = error.localizedDescription }
+        }
     }
     func exportAudio() {
         let title = speechRun == nil ? "未完成的录音片段" : "录音双语结果"

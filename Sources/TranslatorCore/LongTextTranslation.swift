@@ -164,12 +164,12 @@ public struct TextTranslationJob: Identifiable, Codable {
             job?.segments[index].state = .stopped
         }
     }
-    public func start(source: String, model: String, direction: String, translate: @escaping Translate) {
+    public func start(source: String, model: String, direction: String, translate: @escaping Translate, preparedSegments: [TranslationSegment]? = nil) {
         stop()
         let id = UUID()
         job = TextTranslationJob(id: id, source: source, model: model, direction: direction)
         operation = Task { [weak self] in
-            let preparation = Task.detached(priority: .userInitiated) { try LongTextSplitter.split(source) }
+            let preparation = Task.detached(priority: .userInitiated) { try preparedSegments ?? LongTextSplitter.split(source) }
             do {
                 let segments = try await withTaskCancellationHandler {
                     try await preparation.value

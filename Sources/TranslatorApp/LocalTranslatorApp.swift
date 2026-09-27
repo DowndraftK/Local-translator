@@ -11,17 +11,18 @@ import SwiftUI
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if state?.busy == true || state?.streaming.busy == true || state?.textTask.job != nil {
+        if state?.busy == true || state?.streaming.busy == true || state?.textTask.job != nil || state?.documentTask.snapshot != nil {
             let alert = NSAlert()
             alert.messageText = state?.busy == true || state?.streaming.busy == true ? "停止当前任务并退出？" : "退出应用？"
             var messages: [String] = []
             if state?.textTask.job != nil {
                 messages.append("文字翻译结果仅保留于当前窗口，退出后不能恢复。请先复制已有译文或导出双语 TXT；尚未完成的段落不会继续处理。")
             }
+            if state?.documentTask.snapshot != nil { messages.append("文档提取和翻译结果仅保留于当前窗口，退出后不会恢复。请先复制或导出双语 TXT；停止后重新开始是一轮新任务。") }
             if state?.streaming.busy == true { messages.append("录音任务中已保存的英文和翻译会保留，重新打开任务可补译。请优先在录音页停止任务并等待尾句保存；立即退出可能留下未完成的识别部分。") }
             if messages.isEmpty { messages.append("当前处理尚未完成；退出会停止当前任务。") }
             alert.informativeText = messages.joined(separator: "\n\n")
-            alert.addButton(withTitle: state?.textTask.job != nil ? "退出并丢弃未导出的文字结果" : "停止并退出"); alert.addButton(withTitle: "返回应用")
+            alert.addButton(withTitle: state?.textTask.job != nil || state?.documentTask.snapshot != nil ? "退出并丢弃未导出的结果" : "停止并退出"); alert.addButton(withTitle: "返回应用")
             if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
         }
         if state?.streaming.busy == true {
