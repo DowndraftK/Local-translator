@@ -27,6 +27,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     let documentTask = DocumentTranslationController()
     private var documentObservation: AnyCancellable?
     @Published var wholeDocument = true
+    @Published var documentMode: DocumentExtractionMode = .text { didSet { if oldValue != documentMode { invalidateDocumentResult() } } }
     @Published var allDocumentPages = true
     @Published var rangeFirst = "1"
     @Published var rangeLast = "1"
@@ -67,7 +68,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     }
     var busy: Bool { activity != nil || textTask.busy || documentTask.busy }
     private func invalidateDocumentResult() {
-        if !documentTask.busy, let url = documentURL, wholeDocument { documentTask.load(url) }
+        if !documentTask.busy, !documentTask.hasDrafts, let url = documentURL, wholeDocument { documentTask.load(url) }
     }
     private func invalidateTextResult() { if !textTask.busy { textTask.clear() } }
     var chosenBlock: TextBlock? { document?.blocks.first { $0.id == selectedBlock } }
@@ -249,7 +250,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         guard !busy else { return }
         let first = allDocumentPages || !documentTask.isPDF ? 1 : Int(rangeFirst) ?? 0
         let last = allDocumentPages || !documentTask.isPDF ? documentTask.totalPages : Int(rangeLast) ?? 0
-        documentTask.extract(first: first, last: last, model: model, direction: direction)
+        documentTask.extract(first: first, last: last, model: model, direction: direction, mode: documentMode)
     }
     func translateWholeDocument() {
         guard !busy else { return }
@@ -267,7 +268,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         let translation = documentTask.translator.job
         Task {
             let text = await Task.detached {
-                copyOnly ? translation?.completedTranslation ?? "" : snapshot.export(translation: translation)
+                copyOnly ? (translation?.source == snapshot.sourceKey ? translation?.completedTranslation ?? "" : "") : snapshot.export(translation: translation)
             }.value
             if copyOnly { copy(text); notice = "已复制当前完成译文" }
             else { saveText(text, name: snapshot.file + "-双语.txt") }

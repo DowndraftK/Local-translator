@@ -76,14 +76,14 @@ struct WorkspaceView: View {
                         ForEach(state.models, id: \.self) { Text($0).tag($0) }
                     }
                 } label: { Label(state.modelLabel, systemImage: "cpu").font(.system(size: 12, weight: .medium)) }
-                    .fixedSize().disabled(state.busy).accessibilityLabel("选择翻译模型")
+                    .fixedSize().disabled(state.busy || state.documentTask.hasDrafts).accessibilityLabel("选择翻译模型")
             }
         }.padding(.horizontal, 26).padding(.vertical, 20)
     }
     private var subtitle: String {
         switch state.page {
         case .text: return "粘贴原文，查看中英对照，保留重要细节。"
-        case .documents: return "文字型 PDF 整篇翻译、按页双语阅读；保留图片与 Office 选段入口。"
+        case .documents: return "PDF 文字层或显式 OCR、逐页核对校正与双语阅读；保留图片与 Office 选段入口。"
         case .audio: return "导入英语录音，查看带时间轴的双语片段。"
         case .settings: return "检查本机服务和已有模型的位置。"
         }
@@ -148,7 +148,7 @@ struct DirectionPicker: View {
         Picker("翻译方向", selection: $state.direction) {
             Text("英语 → 简体中文").tag("en-zh")
             Text("中文 → 英语").tag("zh-en")
-        }.labelsHidden().frame(width: 190).disabled(state.busy)
+        }.labelsHidden().frame(width: 190).disabled(state.busy || state.documentTask.hasDrafts)
     }
 }
 

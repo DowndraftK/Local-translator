@@ -18,7 +18,7 @@ import SwiftUI
             if state?.textTask.job != nil {
                 messages.append("文字翻译结果仅保留于当前窗口，退出后不能恢复。请先复制已有译文或导出双语 TXT；尚未完成的段落不会继续处理。")
             }
-            if state?.documentTask.snapshot != nil { messages.append("文档提取和翻译结果仅保留于当前窗口，退出后不会恢复。请先复制或导出双语 TXT；停止后重新开始是一轮新任务。") }
+            if state?.documentTask.snapshot != nil { messages.append("文档识别结果、校正文字（含未保存草稿）、核对状态及译文仅保留于当前窗口，退出后不会恢复。请先复制或导出双语 TXT；停止后重新开始是一轮新任务。") }
             if state?.streaming.busy == true { messages.append("录音任务中已保存的英文和翻译会保留，重新打开任务可补译。请优先在录音页停止任务并等待尾句保存；立即退出可能留下未完成的识别部分。") }
             if messages.isEmpty { messages.append("当前处理尚未完成；退出会停止当前任务。") }
             alert.informativeText = messages.joined(separator: "\n\n")

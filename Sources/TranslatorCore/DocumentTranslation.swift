@@ -15,10 +15,11 @@ public struct DocumentPageRange: Codable, Equatable {
     public var label: String { "\(first)–\(last)" }
 }
 public enum DocumentPageState: String, Codable {
-    case pending, extracted, noText, failed, stopped
+    case pending, recognizing, extracted, noText, failed, stopped
     public var label: String {
         switch self {
         case .pending: return "待提取"
+        case .recognizing: return "识别中"
         case .extracted: return "已提取文字"
         case .noText: return "未提取到文字（请查看原页）"
         case .failed: return "读取失败"
@@ -32,6 +33,19 @@ public struct DocumentPageRecord: Identifiable, Codable {
     public var text = ""
     public var state: DocumentPageState = .pending
     public var issue: String?
+    public var mode: DocumentExtractionMode = .text
+    public var ocr: OCRPageEvidence?
+    public var revision = UUID()
+    public var edited = false
+    public var reviewed = false
+    public var sourceLabel: String {
+        guard mode == .ocr else { return "文字层" }
+        if edited {
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "人工清空" }
+            return (ocr?.text ?? "").isEmpty ? "人工输入（非 OCR 覆盖）" : "人工校正"
+        }
+        return "原始 OCR"
+    }
 }
 public struct DocumentSource: Codable {
     public let segmentID: Int
@@ -39,6 +53,7 @@ public struct DocumentSource: Codable {
     public let paragraph: Int
     public let utf8Start: Int
     public let utf8End: Int
+    public let revision: UUID
 }
 public struct DocumentSnapshot: Identifiable, Codable {
     public let id: UUID
@@ -52,27 +67,46 @@ public struct DocumentSnapshot: Identifiable, Codable {
     public var pages: [DocumentPageRecord]
     public var sources: [DocumentSource] = []
     public var segments: [TranslationSegment] = []
+    public var mode: DocumentExtractionMode = .text
+    public var translationStarted = false
     public var phase = "正在提取"
     public var issue: String?
     public static let limitations = "仅处理文字层，不执行 OCR；未提取到文字可能是空白、扫描、图片或提取问题。有文字也不保证图片中文字已覆盖。复杂双栏、表格、公式及阅读顺序需核对；不跨页拼句，不猜测断词，不删除重复或页眉页脚。"
+    public var sourceKey: String { id.uuidString + pages.map { $0.revision.uuidString }.joined() }
+    public var completionLabel: String { mode == .ocr ? "本轮有效原文翻译完成（非 OCR 准确性保证）" : "所选范围的可提取文字翻译完成" }
+    public var modeLimitations: String { mode == .ocr ? DocumentOCR.limitations : Self.limitations }
     public var coverage: String {
-        "提取覆盖：所选 \(pages.count) \(isPDF ? "页" : "份文本") · 有文字 \(pages.filter { $0.state == .extracted }.count) · 无文字 \(pages.filter { $0.state == .noText }.count) · 失败 \(pages.filter { $0.state == .failed }.count) · 未处理 \(pages.filter { $0.state == .pending || $0.state == .stopped }.count)"
+        "\(mode == .ocr ? "识别进度" : "提取覆盖")：所选 \(pages.count) \(isPDF ? "页" : "份文本") · 已完成提取 \(pages.filter { $0.state == .extracted || $0.state == .noText }.count) · 有文字 \(pages.filter { $0.state == .extracted }.count) · 无文字 \(pages.filter { $0.state == .noText }.count) · 失败 \(pages.filter { $0.state == .failed }.count) · 未处理 \(pages.filter { $0.state == .pending || $0.state == .stopped || $0.state == .recognizing }.count)"
     }
-    public func export(translation: TextTranslationJob?) -> String {
-        var out = "文档双语对照\n文件：\(file)\n文件 SHA-256：\(fingerprint)\n总页数：\(isPDF ? String(totalPages) : "不适用（TXT）")\n选定范围：\(isPDF ? range.label : "全文")\n模型：\(model)\n方向：\(direction)\n提取方式：\(isPDF ? "PDFKit 文字层" : "UTF-8")\n任务：\(phase)\n\(coverage)\n"
-        out += "\(translation?.summary.replacingOccurrences(of: "全部翻译完成", with: "所选范围的可提取文字翻译完成") ?? "尚未翻译")\n\(Self.limitations)\n范围外页面未选入本次任务。结果仅保留于当前窗口；退出不恢复。\n"
+    public func export(translation candidate: TextTranslationJob?) -> String {
+        let translation = candidate?.source == sourceKey ? candidate : nil
+        var out = "文档双语对照\n文件：\(file)\n文件 SHA-256：\(fingerprint)\n总页数：\(isPDF ? String(totalPages) : "不适用（TXT）")\n选定范围：\(isPDF ? range.label : "全文")\n模型：\(model)\n方向：\(direction)\n提取方式：\(isPDF ? mode.label : "UTF-8")\n任务：\(phase)\n\(coverage)\n"
+        out += "\(translation?.summary.replacingOccurrences(of: "全部翻译完成", with: completionLabel) ?? "尚未翻译")\n\(modeLimitations)\n范围外页面未选入本次任务。结果仅保留于当前窗口；退出不恢复。\n"
+        if mode == .ocr { out += DocumentOCR.settings + "\n" }
         if let issue { out += "提示：\(issue)\n" }
         if let error = translation?.error { out += "翻译提示：\(error)\n" }
         for page in pages {
             out += "\n===== \(isPDF ? "PDF 物理页 \(page.id)" : "TXT 全文") · \(page.state.label) =====\n"
             if let label = page.label { out += "文档页标签：\(label)\n" }
             if let issue = page.issue { out += "提取提示：\(issue)\n" }
-            out += "[完整提取原文]\n\(page.text)\n[对应译文]\n"
+            if mode == .ocr {
+                out += "来源：\(page.sourceLabel) · \(page.reviewed ? "已人工核对当前修订" : "未人工核对当前修订")\n有效原文修订：\(page.revision)\n"
+                if let evidence = page.ocr {
+                    out += "OCR 语言优先级：\(evidence.languages.joined(separator: ", "))\n渲染：\(evidence.pixelWidth)×\(evidence.pixelHeight) px；rotation=\(evidence.rotation)；cropBox=\(evidence.cropBox)\n坐标：\(evidence.coordinateSystem)\n"
+                    out += "[原始 OCR\(page.edited ? "（保留证据）" : "＝有效原文")]\n\(evidence.text)\n"
+                    out += "[OCR 观察项证据：顺序 / ID / 置信度 / 坐标 / 文字]\n"
+                    for observation in evidence.observations {
+                        out += "\(observation.order) / \(observation.id) / \(observation.confidence) / \(observation.rect) / \(observation.text)\n"
+                    }
+                } else { out += "[原始 OCR]\n【未获得完整页识别结果】\n" }
+                if page.edited { out += "[当前有效原文（\(page.sourceLabel)，非原 PDF 完整性声明）]\n\(page.text)\n" }
+                out += "[对应译文；范围指向上述有效原文修订]\n"
+            } else { out += "[完整提取原文]\n\(page.text)\n[对应译文]\n" }
             let mapping = sources.filter { $0.page == page.id }
-            if mapping.isEmpty { out += page.state == .extracted ? "【尚未分段或翻译；已提取原文完整保留】\n" : "【未获得可翻译片段；\(page.state.label)】\n" }
+            if mapping.isEmpty { out += page.edited && page.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "【人工清空；无可翻译文字】\n" : page.state == .extracted ? "【尚未分段或翻译；已提取原文完整保留】\n" : "【未获得可翻译片段；\(page.state.label)】\n" }
             for source in mapping {
                 let segment = translation?.segments.first { $0.id == source.segmentID }
-                out += "第 \(source.paragraph) 段 · 原文 UTF-8 [\(source.utf8Start), \(source.utf8End))\n"
+                out += "第 \(source.paragraph) 段 · 修订 \(source.revision) · 原文 UTF-8 [\(source.utf8Start), \(source.utf8End))\n"
                 if let segment, segment.state == .completed, let result = segment.result {
                     out += result.translation + "\n"
                     out += result.warnings.map { "核对提示：\($0)\n" }.joined()
@@ -85,14 +119,15 @@ public struct DocumentSnapshot: Identifiable, Codable {
     }
     public mutating func prepare() throws {
         var plan: [TranslationSegment] = [], mapping: [DocumentSource] = []
-        for page in pages where page.state == .extracted {
+        for page in pages where !page.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try Task.checkCancellation()
             // Group consecutive same-page lines into bounded passages, retaining every
             // byte. PDFKit provides no reliable paragraph semantics; no dehyphenation.
             let pieces = try LongTextSplitter.split(page.text)
             guard pieces.map(\.source).joined() == page.text else { throw M0Error.invalid("提取后原文范围校验失败。") }
             for (index, piece) in pieces.enumerated() {
                 mapping.append(DocumentSource(segmentID: plan.count, page: page.id, paragraph: index + 1,
-                    utf8Start: piece.utf8Start, utf8End: piece.utf8End))
+                    utf8Start: piece.utf8Start, utf8End: piece.utf8End, revision: page.revision))
                 plan.append(TranslationSegment(id: plan.count, utf8Start: piece.utf8Start, utf8End: piece.utf8End, source: piece.source))
             }
         }
@@ -143,6 +178,11 @@ public actor DocumentTextReader {
         return identity.fileSize == sourceSize && identity.contentModificationDate == sourceModified ? nil :
             "源文件大小或修改时间已变化；本轮使用载入时快照。若要处理新文件，请重新选择文件。"
     }
+    public func ocrPage(_ number: Int, cancellation: OCRCancellation, direction: String = "en-zh") throws -> DocumentPageRecord {
+        try cancellation.check()
+        guard let page = pdf?.page(at: number - 1) else { throw M0Error.invalid("无法读取此物理页。") }
+        return try DocumentOCR.recognize(page, number: number, cancellation: cancellation, direction: direction)
+    }
     public func page(_ number: Int) throws -> DocumentPageRecord {
         try Task.checkCancellation()
         var result = DocumentPageRecord(id: number)
@@ -158,26 +198,46 @@ public actor DocumentTextReader {
 }
 
 @MainActor public final class DocumentTranslationController: ObservableObject {
+    public typealias OCR = (Int, OCRCancellation) async throws -> DocumentPageRecord
+    public typealias Prepare = (DocumentSnapshot) async throws -> DocumentSnapshot
     @Published public private(set) var snapshot: DocumentSnapshot?
     @Published public private(set) var data: Data?
     @Published public private(set) var totalPages = 0
     @Published public private(set) var isPDF = true
     @Published public private(set) var extracting = false
+    @Published public private(set) var preparing = false
     @Published public private(set) var error: String?
+    @Published public private(set) var drafts: [Int: String] = [:]
     public let translator = TextTranslationController()
     private var observation: AnyCancellable?
     private var operation: Task<Void, Never>?
     private var generation = UUID()
     private var reader = DocumentTextReader()
+    private var cancellation: OCRCancellation?
+    private let injectedOCR: OCR?
+    private let prepare: Prepare
     private var url: URL?
     private var fingerprint = ""
-    public init() {
+    public init(ocr: OCR? = nil, prepare: Prepare? = nil) {
+        injectedOCR = ocr
+        self.prepare = prepare ?? { captured in
+            let task = Task.detached { () throws -> DocumentSnapshot in
+                var ready = captured; try ready.prepare(); return ready
+            }
+            return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+        }
         observation = translator.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
-    public var busy: Bool { extracting || translator.busy }
+    public var busy: Bool { extracting || preparing || translator.busy }
+    public var hasDrafts: Bool { !drafts.isEmpty }
+    public var canEdit: Bool { !busy && snapshot?.mode == .ocr && snapshot?.translationStarted == false }
+    public var canStart: Bool {
+        !busy && !hasDrafts && snapshot?.segments.isEmpty == false &&
+        snapshot?.pages.allSatisfy { $0.state != .pending && $0.state != .recognizing && $0.state != .stopped } == true
+    }
     public func clear() {
         stop(); generation = UUID(); snapshot = nil; data = nil; totalPages = 0; error = nil; url = nil
-        translator.clear()
+        drafts = [:]; translator.clear()
     }
     public func load(_ url: URL) {
         clear(); self.url = url; extracting = true
@@ -194,47 +254,94 @@ public actor DocumentTextReader {
             }
         }
     }
-    public func extract(first: Int, last: Int, model: String, direction: String) {
-        guard !busy, let url, data != nil else { return }
+    public func extract(first: Int, last: Int, model: String, direction: String, mode: DocumentExtractionMode = .text) {
+        guard !busy, !hasDrafts, let url, data != nil else { return }
         do {
             let range = try DocumentPageRange(first: first, last: last, total: totalPages)
+            let effectiveMode: DocumentExtractionMode = isPDF ? mode : .text
             translator.clear(); generation = UUID(); let id = generation
+            let token = OCRCancellation(); cancellation = token
+            let reader = reader
             error = nil; extracting = true
             snapshot = DocumentSnapshot(id: id, file: url.lastPathComponent, fingerprint: fingerprint,
                 totalPages: totalPages, isPDF: isPDF, range: range, model: model, direction: direction,
-                pages: (first...last).map { DocumentPageRecord(id: $0) })
+                pages: (first...last).map { var page = DocumentPageRecord(id: $0); page.mode = effectiveMode; return page }, mode: effectiveMode)
             operation = Task {
-                do {
-                    let warning = await reader.sourceWarning(url, fingerprint: fingerprint)
+                let warning = await reader.sourceWarning(url, fingerprint: fingerprint)
+                guard generation == id, !Task.isCancelled else { return }
+                snapshot?.issue = warning
+                for number in first...last {
                     guard generation == id, !Task.isCancelled else { return }
-                    snapshot?.issue = warning
-                    for number in first...last {
-                        let page = try await reader.page(number)
-                        guard generation == id, !Task.isCancelled else { return }
+                    snapshot?.pages[number - first].state = .recognizing
+                    do {
+                        let page: DocumentPageRecord
+                        if effectiveMode == .ocr {
+                            if let injectedOCR { page = try await injectedOCR(number, token) }
+                            else { page = try await reader.ocrPage(number, cancellation: token, direction: direction) }
+                        } else { page = try await reader.page(number) }
+                        guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
                         snapshot?.pages[number - first] = page
+                    } catch {
+                        guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
+                        snapshot?.pages[number - first].state = .failed
+                        snapshot?.pages[number - first].issue = error.localizedDescription
                     }
-                    guard let captured = snapshot else { return }
-                    let preparation = Task.detached { () throws -> DocumentSnapshot in
-                        var ready = captured; try ready.prepare(); return ready
-                    }
-                    var ready = try await withTaskCancellationHandler { try await preparation.value } onCancel: { preparation.cancel() }
-                    guard generation == id, !Task.isCancelled else { return }
-                    ready.phase = ready.segments.isEmpty ? "没有可翻译的文字" : "提取完成，等待翻译"
-                    snapshot = ready; extracting = false; operation = nil
-                } catch {
-                    guard generation == id, !Task.isCancelled else { return }
-                    snapshot?.phase = "提取或分段失败"; snapshot?.issue = error.localizedDescription
-                    self.error = error.localizedDescription; extracting = false; operation = nil
                 }
+                guard generation == id, !Task.isCancelled else { return }
+                extracting = false; cancellation = nil
+                await rebuild(id: id)
             }
         } catch { self.error = error.localizedDescription }
     }
+    private func rebuild(id: UUID) async {
+        guard let captured = snapshot, generation == id else { return }
+        preparing = true; snapshot?.phase = "正在后台重建有效原文分段"
+        do {
+            var ready = try await prepare(captured)
+            guard generation == id, !Task.isCancelled else { return }
+            ready.phase = ready.segments.isEmpty ? "没有可翻译的有效原文" : "提取/校正计划已就绪，等待翻译"
+            snapshot = ready; preparing = false; operation = nil
+        } catch {
+            guard generation == id, !Task.isCancelled else { return }
+            snapshot?.segments = []; snapshot?.sources = []
+            snapshot?.phase = "分段失败；原始结果与有效原文仍可导出"
+            self.error = error.localizedDescription; preparing = false; operation = nil
+        }
+    }
+    public func beginEdit(page: Int) {
+        guard canEdit, let record = snapshot?.pages.first(where: { $0.id == page }) else { return }
+        if drafts[page] == nil { drafts[page] = record.text }
+    }
+    public func updateDraft(page: Int, text: String) { guard canEdit, drafts[page] != nil else { return }; drafts[page] = text }
+    public func cancelEdit(page: Int) { drafts.removeValue(forKey: page) }
+    public func saveEdit(page: Int) {
+        guard canEdit, let text = drafts[page], let index = snapshot?.pages.firstIndex(where: { $0.id == page }) else { return }
+        snapshot?.pages[index].text = text
+        snapshot?.pages[index].edited = true
+        snapshot?.pages[index].reviewed = false
+        snapshot?.pages[index].revision = UUID()
+        drafts.removeValue(forKey: page)
+        translator.clear(); snapshot?.segments = []; snapshot?.sources = []
+        generation = UUID(); let id = generation
+        preparing = true; error = nil
+        operation = Task { await rebuild(id: id) }
+    }
+    public func setReviewed(page: Int, reviewed: Bool) {
+        guard !busy, drafts[page] == nil, let index = snapshot?.pages.firstIndex(where: { $0.id == page }) else { return }
+        snapshot?.pages[index].reviewed = reviewed
+    }
+    /// UI confirms that translations will be cleared before invoking this action.
+    public func reopenReview() {
+        guard !busy, !hasDrafts, snapshot?.mode == .ocr else { return }
+        generation = UUID(); translator.clear(); snapshot?.translationStarted = false
+        snapshot?.phase = "重新核对；原始 OCR 与当前校正文保留，下一轮从头翻译"
+    }
     public func start(translate: @escaping TextTranslationController.Translate) {
-        guard !busy, let snapshot, !snapshot.segments.isEmpty,
-              snapshot.pages.allSatisfy({ $0.state != .pending && $0.state != .stopped }) else { return }
-        self.snapshot?.phase = "提取快照已固定；翻译状态见下方"
+        guard canStart, let snapshot else { return }
+        self.snapshot?.translationStarted = true
+        self.snapshot?.phase = "本轮来源及修订已固定；翻译状态见下方"
         let id = generation, reader = reader, url = url
-        translator.start(source: "", model: snapshot.model, direction: snapshot.direction, translate: { [weak self] input, model, direction in
+        translator.start(source: snapshot.sourceKey, model: snapshot.model, direction: snapshot.direction, translate: { [weak self] input, model, direction in
             if let url {
                 let warning = await reader.sourceWarning(url, fingerprint: snapshot.fingerprint)
                 guard let self, self.generation == id, !Task.isCancelled else { throw CancellationError() }
@@ -251,11 +358,14 @@ public actor DocumentTextReader {
         }, preparedSegments: snapshot.segments)
     }
     public func stop() {
+        cancellation?.cancel(); cancellation = nil
         operation?.cancel(); operation = nil
-        if extracting {
-            generation = UUID(); extracting = false; snapshot?.phase = "提取已停止，请重新提取后翻译"
+        if extracting || preparing {
+            generation = UUID(); extracting = false; preparing = false
+            snapshot?.phase = "提取/分段已停止；已获结果保留。当前页已请求取消，可能仍在等待底层返回；不会接受迟到结果。重新提取后翻译。"
+            snapshot?.segments = []; snapshot?.sources = []
             if let pages = snapshot?.pages {
-                for i in pages.indices where pages[i].state == .pending { snapshot?.pages[i].state = .stopped }
+                for i in pages.indices where pages[i].state == .pending || pages[i].state == .recognizing { snapshot?.pages[i].state = .stopped }
             }
         }
         translator.stop()

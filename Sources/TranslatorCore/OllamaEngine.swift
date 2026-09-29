@@ -59,6 +59,8 @@ public struct ChatAccumulator {
 public final class OllamaEngine {
     public let baseURL: URL
     private let session: URLSession
+    private let cancellationLock = NSLock()
+    private var requestsCancelled = false
     public static func validateEndpoint(_ string: String) throws -> URL {
         guard let components = URLComponents(string: string),
               components.scheme == "http",
@@ -82,9 +84,21 @@ public final class OllamaEngine {
     }
     deinit { session.invalidateAndCancel() }
     /// Cancels only this engine instance's requests, never the shared Ollama process.
-    public func cancelRequests() { session.invalidateAndCancel() }
+    public func cancelRequests() {
+        cancellationLock.lock(); requestsCancelled = true; cancellationLock.unlock()
+        // Invalidating here races with an in-flight async function creating its
+        // next URLSessionTask, which raises an uncatchable NSException. Keep the
+        // session valid until deinit, reject new requests, cancel existing tasks.
+        session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+    }
+    private func checkCancellation() throws {
+        try Task.checkCancellation()
+        cancellationLock.lock(); let cancelled = requestsCancelled; cancellationLock.unlock()
+        if cancelled { throw CancellationError() }
+    }
 
     private func request(_ path: String, body: [String: Any]? = nil) throws -> URLRequest {
+        try checkCancellation()
         var r = URLRequest(url: baseURL.appendingPathComponent(path))
         if let body {
             r.httpMethod = "POST"
