@@ -42,8 +42,9 @@ def result_tokens(result, duration):
             start, end = float(word['start']), float(word['end'])
             if not all(math.isfinite(t) for t in (start, end)) or end < start:
                 raise ValueError('校对结果包含无效时间戳；原始字幕未改动。')
-            batch.append({'text': str(word['word']), 'start': max(0, min(duration, start)),
-                          'end': max(0, min(duration, end))})
+            # The raw model result is also retained in refinement.json. Let the
+            # shared media-time validator record any bound corrections.
+            batch.append({'text': str(word['word']), 'start': start, 'end': end})
         batches.append(batch)
     return batches
 

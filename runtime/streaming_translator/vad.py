@@ -19,8 +19,9 @@ class LookbackVAD:
             if 'start' in event:
                 start = max(0, int(event['start']) - self.preroll)
                 self.late_events += start < self.emitted
-                self.open_start = max(self.emitted, start)
-            elif 'end' in event and self.open_start is not None:
+                start = max(self.emitted, start)
+                self.open_start = start if self.open_start is None else min(self.open_start, start)
+            if 'end' in event and self.open_start is not None:
                 self.intervals.append((self.open_start, int(event['end']) + self.postroll))
                 self.open_start = None
         limit = self.received if final else max(self.emitted, self.received - self.hold)

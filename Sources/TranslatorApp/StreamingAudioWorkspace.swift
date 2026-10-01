@@ -63,6 +63,16 @@ struct StreamingAudioWorkspace: View {
                     Text(AppState.time(seconds)).monospacedDigit().font(.system(size: 12))
                 }
             }
+            if let count = controller.snapshot?.quality_issue_count, count > 0 {
+                Text("发现 \(count) 处识别待核对位置，可能存在漏词或时间异常；原录音已保留，可回放或录后校对。")
+                    .font(.caption).foregroundStyle(.orange)
+                HStack {
+                    ForEach(Array((controller.snapshot?.quality_issues ?? []).suffix(3).enumerated()), id: \.offset) { _, issue in
+                        Button("回放核对 \(AppState.time(issue.playbackTime))") { controller.play(from: issue.playbackTime) }
+                            .font(.caption).buttonStyle(.link)
+                    }
+                }
+            }
             if let message = controller.error ?? controller.snapshot?.asr_error {
                 Text(message).font(.system(size: 12)).foregroundStyle(.red).textSelection(.enabled).lineLimit(5)
             }
@@ -85,7 +95,10 @@ struct StreamingAudioWorkspace: View {
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
+                        // Snapshots are already paged to 200 rows. A regular stack
+                        // avoids the macOS accessibility scroll-to-end trap in
+                        // SwiftUI's lazy collection while keeping rendering bounded.
+                        VStack(alignment: .leading, spacing: 0) {
                             ForEach(controller.snapshot?.segments ?? []) { segment in
                                 HStack(alignment: .top, spacing: 16) {
                                     Button { controller.play(from: segment.start) } label: {
@@ -96,19 +109,22 @@ struct StreamingAudioWorkspace: View {
                                     }.buttonStyle(.plain).help("从此处播放保存的录音")
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text(segment.english).font(.system(size: 13)).foregroundStyle(.secondary).lineSpacing(4)
+                                        if let note = segment.timing_note {
+                                            Text(note).font(.caption).foregroundStyle(.orange)
+                                        }
                                         if let chinese = segment.chinese {
                                             Text(chinese).font(.system(size: 15)).lineSpacing(5)
                                         } else {
                                             Text(translationLabel(segment)).font(.system(size: 12)).foregroundStyle(segment.translation_state == "failed" ? .orange : .secondary)
                                         }
                                         HStack {
-                                            if segment.boundary == "length_limit" { Text("长句暂分，核对上下文").font(.caption2).foregroundStyle(.secondary) }
+                                            if segment.boundary == "length_limit" || segment.boundary == "vad_pause" { Text("长句或停顿暂分，核对上下文").font(.caption2).foregroundStyle(.secondary) }
                                             Spacer()
                                             Button("修改英文") { editing = segment; editedText = segment.english }
                                                 .buttonStyle(.link).font(.system(size: 11)).disabled(controller.busy)
                                         }
                                     }.textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                                }.padding(16)
+                                }.padding(16).accessibilityElement(children: .contain)
                                 Divider().padding(.leading, 80)
                             }
                             if let pending = controller.snapshot?.pending_english, !pending.isEmpty {
@@ -117,7 +133,7 @@ struct StreamingAudioWorkspace: View {
                                     Text(pending).font(.system(size: 13)).textSelection(.enabled)
                                 }.padding(16)
                             }
-                        }
+                        }.accessibilityElement(children: .contain)
                     }
                 }
             }

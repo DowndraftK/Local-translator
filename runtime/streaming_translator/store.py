@@ -9,6 +9,7 @@ import time
 import uuid
 
 from .segmentation import take_segments
+from .timing import validate_token, effective_row
 
 
 def file_sha256(path):
@@ -37,7 +38,7 @@ class SessionStore:
         self.db = sqlite3.connect(self.directory / 'session.sqlite', timeout=10)
         self.db.row_factory = sqlite3.Row
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 2:
+        if version > 3:
             self.db.close()
             raise ValueError('任务数据库版本较新，请使用更新的应用。')
         self.db.execute('PRAGMA journal_mode=WAL')
@@ -50,6 +51,9 @@ class SessionStore:
                 id INTEGER PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 1,
                 start REAL NOT NULL, end REAL NOT NULL, english TEXT NOT NULL,
                 boundary TEXT NOT NULL, committed_at REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS segment_timing (
+                segment_id INTEGER PRIMARY KEY REFERENCES segments(id) ON DELETE CASCADE,
+                evidence TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS source_revisions (
                 segment_id INTEGER, revision INTEGER, english TEXT NOT NULL,
                 changed_at REAL NOT NULL, PRIMARY KEY(segment_id, revision));
@@ -67,8 +71,8 @@ class SessionStore:
                 payload TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS translation_state ON translations(state, segment_id);
         ''')
-        if version < 2:
-            self.db.execute('PRAGMA user_version=2')
+        if version < 3:
+            self.db.execute('PRAGMA user_version=3')
 
     def close(self):
         self.db.close()
@@ -106,13 +110,21 @@ class SessionStore:
         cursor = self.db.execute('INSERT INTO segments(start,end,english,boundary,committed_at) VALUES (?,?,?,?,?)',
                                 (segment['start'], segment['end'], segment['english'], segment['boundary'], time.time()))
         index = cursor.lastrowid
+        evidence = segment.get('timing', {'status': 'unknown', 'issues': [], 'reasons': []})
+        previous = self.db.execute('SELECT start FROM segments WHERE id<? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
+        if previous and segment['start'] < previous[0] - .75:
+            evidence['issues'].append('segment_time_rewind')
+            evidence['status'] = 'needs_review'
+        self.db.execute('INSERT INTO segment_timing VALUES (?,?)', (index, json.dumps(evidence, ensure_ascii=False)))
         self.db.execute('INSERT INTO source_revisions VALUES (?,?,?,?)', (index, 1, segment['english'], time.time()))
         self.db.execute('INSERT INTO translations(segment_id,revision,state,model) VALUES (?,1,?,?)',
                         (index, 'pending' if self.get('translation_model') else 'disabled', self.get('translation_model')))
         return index
 
-    def ingest(self, sequence, tokens, final=False, complete=None):
+    def ingest(self, sequence, tokens, final=False, complete=None, boundary=None):
         event = {'tokens': tokens, 'final': final}
+        if boundary is not None:
+            event['boundary'] = boundary
         if complete is not None:
             event['complete'] = complete
         payload = json.dumps(event, ensure_ascii=False, sort_keys=True)
@@ -126,7 +138,12 @@ class SessionStore:
             if sequence != (0 if last is None else last + 1):
                 raise ValueError('ASR 事件顺序不连续。')
             self.db.execute('INSERT INTO asr_events VALUES (?,?)', (sequence, payload))
-            segments, pending = take_segments(self.get('pending_tokens', []) + tokens, final=final)
+            validated = [validate_token(t, self.get('audio_seconds')) for t in tokens]
+            segments, pending = take_segments(self.get('pending_tokens', []) + validated, final=final)
+            if boundary:
+                for segment in segments:
+                    if segment['boundary'] == 'end_of_input':
+                        segment['boundary'] = boundary
             ids = [self._add_segment(segment) for segment in segments]
             self.set('pending_tokens', pending)
             if final:
@@ -161,17 +178,22 @@ class SessionStore:
                 ('segments', 'SELECT * FROM segments WHERE id>?', segment_id),
                 ('translations', 'SELECT * FROM translations WHERE segment_id>?', segment_id),
                 ('source_revisions', 'SELECT * FROM source_revisions WHERE segment_id>?', segment_id),
+                ('segment_timing', 'SELECT * FROM segment_timing WHERE segment_id>?', segment_id),
                 ('asr_events', 'SELECT * FROM asr_events WHERE sequence>?', sequence)]}
             tail['metadata'] = {row['key']: json.loads(row['value']) for row in self.db.execute('SELECT * FROM metadata')}
             self.db.execute('INSERT INTO recovery_history(created_at,checkpoint_id,payload) VALUES (?,?,?)',
                 (time.time(), checkpoint['id'] if checkpoint else None, json.dumps(tail, ensure_ascii=False)))
-            for table in ('translations', 'source_revisions'):
+            for table in ('translations', 'source_revisions', 'segment_timing'):
                 self.db.execute(f'DELETE FROM {table} WHERE segment_id>?', (segment_id,))
             self.db.execute('DELETE FROM segments WHERE id>?', (segment_id,))
             self.db.execute('DELETE FROM asr_events WHERE sequence>?', (sequence,))
             self.set('pending_tokens', json.loads(checkpoint['pending_tokens']) if checkpoint else [])
             self.set('asr_complete', False)
             self.set('resume_sample', sample)
+            retained_issues = [i for i in self.get('quality_issues', [])
+                               if i.get('end', float('inf')) <= sample/16000]
+            self.set('quality_issues', retained_issues)
+            self.set('quality_issue_count', len(retained_issues))
             self.set('error', None)
             self.set('asr_error', None)
             self.set('state', 'preparing')
@@ -223,6 +245,33 @@ class SessionStore:
                             (revision, 'pending' if self.get('translation_model') else 'disabled', segment_id))
             self.set('state', 'needs_translation' if self.get('translation_model') else self.get('state'))
 
+    def quality_issue(self, issue):
+        # Keep a compact UI summary; full events and ranges remain in worker logs.
+        with self.transaction():
+            issues = self.get('quality_issues', [])
+            self.set('quality_issue_count', self.get('quality_issue_count', 0) + 1)
+            self.set('quality_issues', (issues + [issue])[-100:])
+
+    def retime(self, segment_id, start_sample, end_sample, reason):
+        if (not reason.strip() or any(not isinstance(v, int) or isinstance(v, bool) for v in (start_sample, end_sample))
+                or start_sample < 0 or end_sample <= start_sample):
+            raise ValueError('时间修正需要有效样本范围和依据。')
+        duration = self.get('audio_seconds')
+        if duration is not None and end_sample / 16000 > duration:
+            raise ValueError('时间不能超过保存的录音。')
+        with self.transaction():
+            row = self.db.execute('SELECT start,end FROM segments WHERE id=?', (segment_id,)).fetchone()
+            if not row:
+                raise ValueError('片段不存在。')
+            old = self.db.execute('SELECT evidence FROM segment_timing WHERE segment_id=?', (segment_id,)).fetchone()
+            evidence = json.loads(old[0]) if old else {'status': 'unknown', 'raw_tokens': None}
+            evidence.setdefault('corrections', []).append({'previous': dict(row), 'start_sample': start_sample,
+                'end_sample': end_sample, 'reason': reason, 'changed_at': time.time()})
+            evidence['status'] = 'corrected'
+            self.db.execute('INSERT OR REPLACE INTO segment_timing VALUES (?,?)', (segment_id, json.dumps(evidence)))
+            self.db.execute('UPDATE segments SET start=?,end=? WHERE id=?',
+                (start_sample / 16000, end_sample / 16000, segment_id))
+
     def snapshot(self, limit=None, offset=None):
         total = self.db.execute('SELECT COUNT(*) FROM segments').fetchone()[0]
         offset = max(0, total-limit) if limit is not None and offset is None else max(0, offset or 0)
@@ -232,7 +281,16 @@ class SessionStore:
             (-1 if limit is None else limit, offset)).fetchall()
         metadata = {row['key']: json.loads(row['value']) for row in self.db.execute('SELECT * FROM metadata')}
         pending = metadata.pop('pending_tokens', [])
-        metadata.update(segment_count=total, segment_offset=offset, segments=[dict(row) for row in rows],
+        presented = []
+        for row in rows:
+            row = dict(row)
+            timing = self.db.execute('SELECT evidence FROM segment_timing WHERE segment_id=?', (row['id'],)).fetchone()
+            evidence = json.loads(timing[0]) if timing else {'status': 'unknown'}
+            row['timing_status'] = evidence['status']
+            row['timing_note'] = ('时间估计异常，请回放核对。' if evidence['status'] == 'needs_review' else
+                '旧任务缺少原始时间依据。' if evidence['status'] == 'unknown' else None)
+            presented.append(effective_row(row, metadata.get('audio_seconds')))
+        metadata.update(segment_count=total, segment_offset=offset, segments=presented,
                         pending_english=''.join(t['text'] for t in pending).strip(),
                         updated_at=time.time())
         counts = dict(self.db.execute('SELECT state,COUNT(*) FROM translations GROUP BY state'))
@@ -257,6 +315,7 @@ class SessionStore:
 def export_subtitles(snapshot, format='srt'):
     if format not in ('srt', 'vtt', 'txt'):
         raise ValueError('导出格式必须是 srt、vtt 或 txt。')
+    snapshot = {**snapshot, 'segments': [effective_row(r, snapshot.get('audio_seconds')) for r in snapshot['segments']]}
     if format == 'txt':
         return '\n\n'.join(f"[{r['start']:.2f}–{r['end']:.2f}]\n{r['english']}\n{r['chinese'] or '［尚未翻译］'}" for r in snapshot['segments']) + '\n'
     def stamp(seconds):
@@ -269,10 +328,7 @@ def export_subtitles(snapshot, format='srt'):
         # Prevent source text from injecting subtitle markup or cue separators.
         return ' '.join((text or '［尚未翻译］').split()).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     output = ['WEBVTT\n'] if format == 'vtt' else []
-    previous_end = 0
     for i, row in enumerate(snapshot['segments'], 1):
-        start = max(previous_end, row['start'], 0)
-        end = max(start + .1, row['end'])
-        previous_end = end
+        start, end = row['start'], row['end']
         output.append(f"{i}\n{stamp(start)} --> {stamp(end)}\n{clean(row['english'])}\n{clean(row['chinese'])}\n")
     return '\n'.join(output) + '\n'

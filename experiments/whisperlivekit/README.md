@@ -1,5 +1,19 @@
 # WhisperLiveKit 研究验证
 
+2026-10-01新增0.2.6固定质量补丁，最终为`input-clock`（r8），默认新任务使用`artifacts/whisperlivekit-speech-quality-20260930-r8/source`。从同一原快照生成新目录，验证[speech-quality-baseline.json](speech-quality-baseline.json)与既有MPS基线，不原地修改安装目录；完整可执行Python清单继续受运行时校验。窗口推进按确认批次的实际输入终点，整批转入context；中间候选用模型词时间推进曾误删真实重复，未交付。
+
+```sh
+python3 experiments/whisperlivekit/prepare_speech_quality.py \
+  --source artifacts/whisperlivekit-review-20260915/WhisperLiveKit-363e4f6d029694d9c81ae548beddd9d3c88a3637 \
+  --destination artifacts/whisperlivekit-speech-quality-20260930-r8/source
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  artifacts/whisperlivekit-gpu-review-20260915/venv/bin/python -m pytest \
+  -q -p no:cacheprovider experiments/whisperlivekit/test_speech_quality_patch.py
+```
+
+目标目录必须不存在。生成器默认input-clock；其他stage仅供受控候选对照，不代表验收通过。10项方法回归使用实际生成源码、模拟tensor/音频/日志，不加载权重。真实GPU对照、r3/r6/r7拒绝原因、歌词退化和时间目标失败见[0.2.6记录](../../docs/0.2.6语音质量开发记录.md)与[质量实验入口](../streaming-translator/README.md)。以下保留最初研究及历史MPS结果，不冒充当前质量证据。
+
+
 实验日期：2026-09-15；更新：2026-09-16。最初结论见 [技术评估与接入方案](../../docs/WhisperLiveKit技术评估与接入方案.md)，后续真实模型结果见 [MPS 实测报告](../../docs/WhisperLiveKit-MPS实测报告.md)。
 
 这里保留最初的隔离研究测试。2026-09-17 原生应用已通过 [runtime](../../runtime/README.md) 接入固定的 MPS 补丁源码，新增独立中文队列和任务持久化。最初的控制逻辑测试使用固定上游源码、合成 token 与假翻译函数，无 ASR/MT 模型加载；后续增加了 GPU 算子探测和真实 Whisper 模型流式实验。各阶段的环境与证据分开记录。

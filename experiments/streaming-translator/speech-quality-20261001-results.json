@@ -1,0 +1,577 @@
+{
+  "version": "0.2.6",
+  "build": 18,
+  "date": "2026-10-01",
+  "candidate": "input-clock / r8",
+  "scope": "有限语音质量增量；不是完整 M0 或真实课堂验收。",
+  "normalization": "小写、引号规范化、去括号听众提示、忽略标点；数字拼法与缩写差异仍计错。",
+  "resources": {
+    "model": "large-v3-turbo",
+    "encoder": "MLX GPU float16",
+    "decoder": "MPS GPU float32",
+    "mps_cpu_fallback": false,
+    "coalesce_seconds": 0.5,
+    "max_context_tokens": 128,
+    "translation": "HY-MT2 1.8B"
+  },
+  "content": {
+    "missing_window_130s": {
+      "before": {
+        "reference_words": 385,
+        "hypothesis_words": 384,
+        "errors": 33,
+        "word_error_rate": 0.08571428571428572,
+        "counts": {
+          "deletion": 11,
+          "substitution": 12,
+          "insertion": 10
+        },
+        "longest_consecutive_deleted_words": 7
+      },
+      "after": {
+        "reference_words": 385,
+        "hypothesis_words": 387,
+        "errors": 29,
+        "word_error_rate": 0.07532467532467532,
+        "counts": {
+          "deletion": 8,
+          "substitution": 11,
+          "insertion": 10
+        },
+        "longest_consecutive_deleted_words": 7
+      }
+    },
+    "loop_window_105s": {
+      "before": {
+        "reference_words": 296,
+        "hypothesis_words": 306,
+        "errors": 17,
+        "word_error_rate": 0.057432432432432436,
+        "counts": {
+          "insertion": 11,
+          "substitution": 5,
+          "deletion": 1
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      "after": {
+        "reference_words": 296,
+        "hypothesis_words": 307,
+        "errors": 15,
+        "word_error_rate": 0.05067567567567568,
+        "counts": {
+          "insertion": 11,
+          "substitution": 4
+        },
+        "longest_consecutive_deleted_words": 0
+      }
+    },
+    "full_ted_680_2285625s": {
+      "before": {
+        "reference_words": 1950,
+        "hypothesis_words": 1969,
+        "errors": 73,
+        "word_error_rate": 0.03743589743589744,
+        "counts": {
+          "insertion": 29,
+          "substitution": 34,
+          "deletion": 10
+        },
+        "longest_consecutive_deleted_words": 2
+      },
+      "after": {
+        "reference_words": 1950,
+        "hypothesis_words": 1958,
+        "errors": 40,
+        "word_error_rate": 0.020512820512820513,
+        "counts": {
+          "insertion": 14,
+          "substitution": 20,
+          "deletion": 6
+        },
+        "longest_consecutive_deleted_words": 1
+      }
+    },
+    "independent_ted_190s": {
+      "before": {
+        "reference_words": 443,
+        "hypothesis_words": 388,
+        "errors": 91,
+        "word_error_rate": 0.2054176072234763,
+        "counts": {
+          "deletion": 64,
+          "substitution": 18,
+          "insertion": 9
+        },
+        "longest_consecutive_deleted_words": 52
+      },
+      "after": {
+        "reference_words": 443,
+        "hypothesis_words": 375,
+        "errors": 76,
+        "word_error_rate": 0.17155756207674944,
+        "counts": {
+          "deletion": 70,
+          "substitution": 4,
+          "insertion": 2
+        },
+        "longest_consecutive_deleted_words": 57
+      }
+    },
+    "synthetic_20_sentences": {
+      "before": {
+        "reference_words": 126,
+        "hypothesis_words": 149,
+        "errors": 50,
+        "word_error_rate": 0.3968253968253968,
+        "counts": {
+          "insertion": 24,
+          "substitution": 25,
+          "deletion": 1
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      "after": {
+        "reference_words": 126,
+        "hypothesis_words": 126,
+        "errors": 10,
+        "word_error_rate": 0.07936507936507936,
+        "counts": {
+          "substitution": 6,
+          "insertion": 2,
+          "deletion": 2
+        },
+        "longest_consecutive_deleted_words": 2
+      }
+    }
+  },
+  "independent_source": "https://www.ted.com/talks/kelly_a_boesch_how_ai_unleashed_not_replaced_my_creativity",
+  "quality_limits": {
+    "historical_accumulated_60m_missing_and_loop": "未复现或未验证关闭；短剪辑和单轮 TED 不能替代长状态。",
+    "independent_lyrics": "删除总数64→70，连续歌词缺口52→57词；总WER降低不能掩盖歌词删除退化。",
+    "independent_clip_edge": "末尾参考12词未识别（旧11词），含裁切半句的参考不确定性。",
+    "forced_pause_tail": "15秒模拟暂停、快速归档45秒PCM后仍有尾部漏词；原音频完整，模型确认输出已缺失，不能标内容全部通过。",
+    "word_and_time_accuracy": "模型仍会漏词、错词、额外生成词与提前估计句起点。"
+  },
+  "reference_repeat_scan": {
+    "method": "最终4个真人会话扫描相邻1–8词的完全相同重复块；复核到的重复均在各自官方参考中出现。不是通用循环检测或声音对齐。",
+    "unsupported_adjacent_exact_repeat_blocks": 0,
+    "real_repeats_preserved": true
+  },
+  "key_content": {
+    "full_ted_negation_deletion_or_substitution": 0,
+    "full_ted_number_surface_difference_count": 1,
+    "independent_lyric_negation_deleted": 1,
+    "limits": "基于固定参考词对齐；不是人工逐句中文语义评分。"
+  },
+  "representative_45s": {
+    "file_batch": {
+      "reference_words": 117,
+      "hypothesis_words": 117,
+      "errors": 3,
+      "word_error_rate": 0.02564102564102564,
+      "counts": {
+        "deletion": 1,
+        "substitution": 1,
+        "insertion": 1
+      },
+      "longest_consecutive_deleted_words": 1
+    },
+    "file_paced": {
+      "reference_words": 117,
+      "hypothesis_words": 119,
+      "errors": 3,
+      "word_error_rate": 0.02564102564102564,
+      "counts": {
+        "insertion": 2,
+        "substitution": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    },
+    "irregular_pcm_paced": {
+      "reference_words": 117,
+      "hypothesis_words": 115,
+      "errors": 5,
+      "word_error_rate": 0.042735042735042736,
+      "counts": {
+        "substitution": 3,
+        "deletion": 2
+      },
+      "longest_consecutive_deleted_words": 1
+    },
+    "independent_refinement": {
+      "reference_words": 117,
+      "hypothesis_words": 118,
+      "errors": 3,
+      "word_error_rate": 0.02564102564102564,
+      "counts": {
+        "substitution": 2,
+        "insertion": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    },
+    "reference_scope": "117词；官方开头16个cue加裁切末尾has the。边缘半句有限不确定性。"
+  },
+  "recovery_45s": {
+    "forced_pause": {
+      "before": {
+        "reference_words": 117,
+        "hypothesis_words": 93,
+        "errors": 26,
+        "word_error_rate": 0.2222222222222222,
+        "counts": {
+          "deletion": 25,
+          "insertion": 1
+        },
+        "longest_consecutive_deleted_words": 9
+      },
+      "after": {
+        "reference_words": 117,
+        "hypothesis_words": 110,
+        "errors": 10,
+        "word_error_rate": 0.08547008547008547,
+        "counts": {
+          "deletion": 8,
+          "substitution": 1,
+          "insertion": 1
+        },
+        "longest_consecutive_deleted_words": 5
+      }
+    },
+    "crash_resume": {
+      "before": {
+        "reference_words": 117,
+        "hypothesis_words": 79,
+        "errors": 38,
+        "word_error_rate": 0.3247863247863248,
+        "counts": {
+          "deletion": 38
+        },
+        "longest_consecutive_deleted_words": 29
+      },
+      "after": {
+        "reference_words": 117,
+        "hypothesis_words": 116,
+        "errors": 2,
+        "word_error_rate": 0.017094017094017096,
+        "counts": {
+          "deletion": 1,
+          "substitution": 1
+        },
+        "longest_consecutive_deleted_words": 1
+      }
+    }
+  },
+  "verification": {
+    "python_passed": 73,
+    "python_runtime_passed": 63,
+    "python_patch_passed": 10,
+    "swift_passed": 42,
+    "swift_ocr_skipped": 1,
+    "real_ocr_rerun": false,
+    "physical_microphone_used": false,
+    "ui_page_rows": 200,
+    "ui_total_rows": 250,
+    "ui_export_counts": {
+      "txt": 250,
+      "srt": 250,
+      "vtt": 250
+    },
+    "ui_edit_source_revision": 2,
+    "ui_retranslation_revision": 2,
+    "ui_revised_export_rows": 7,
+    "ui_legacy_rows_preserved": 6,
+    "ui_legacy_db_version_before": 2,
+    "ui_legacy_db_version_after": 3,
+    "refinement_original_records_and_audio_preserved": true,
+    "signed_app_verified": true,
+    "zip_verified": true,
+    "bundled_python_files_matched": 13,
+    "app_and_worker_match_release_after_signature_normalization": true
+  },
+  "alignment": {
+    "scope": "synthetic clean speech; not human listening annotations",
+    "total_anchors": 20,
+    "matched": 17,
+    "unmatched": [
+      4,
+      9,
+      15
+    ],
+    "start": {
+      "n": 17,
+      "signed_mean": -0.7751617647058818,
+      "signed_median": -0.2701874999999916,
+      "absolute_median": 0.2701874999999916,
+      "absolute_p95": 2.274499999999996,
+      "absolute_max": 2.274499999999996
+    },
+    "end": {
+      "n": 17,
+      "signed_mean": -0.41325735294117366,
+      "signed_median": -0.36862499999999443,
+      "absolute_median": 0.36862499999999443,
+      "absolute_p95": 0.6956249999999926,
+      "absolute_max": 0.6956249999999926
+    },
+    "over_two_seconds": [
+      2,
+      6,
+      10,
+      11,
+      12
+    ],
+    "early_over_half_second": [
+      1,
+      2,
+      3,
+      6,
+      10,
+      11,
+      12
+    ],
+    "target_absolute_median_seconds": 0.5,
+    "target_absolute_p95_seconds": 1.5,
+    "all_targets_passed": false,
+    "annotation_method": "推理前固定20句原创Daniel合成语音外沿幅值≥80/32768；低能音素±80ms。非真人人工听辨。",
+    "media_seconds": 94.3766875,
+    "pause_resume_sample": 809629,
+    "wall_pause_seconds": 95,
+    "wall_pause_added_to_media": false,
+    "last_anchor": {
+      "id": 20,
+      "start_error": -0.30343750000000114,
+      "end_error": -0.6956249999999926
+    }
+  },
+  "full_ted_performance": {
+    "before": {
+      "audio_seconds": 680.2285625,
+      "asr_call_seconds": 655.3629203409873,
+      "asr_elapsed_seconds": 680.9318054579999,
+      "queue_peak_seconds": 2.0,
+      "asr_tail_seconds": 0.6982748329974129,
+      "first_committed_token_seconds": 6.783910541998921,
+      "worker_peak_rss_bytes": 4935483392,
+      "estimated_end_to_commit_seconds": {
+        "median": 3.8213317489623932,
+        "p95": 4.77455584526062,
+        "max": 8.272376832962038
+      }
+    },
+    "after": {
+      "audio_seconds": 680.2285625,
+      "asr_call_seconds": 645.3770329069812,
+      "asr_elapsed_seconds": 680.737720209001,
+      "queue_peak_seconds": 2.0,
+      "asr_tail_seconds": 0.5053842500001338,
+      "first_committed_token_seconds": 6.784211750000395,
+      "worker_peak_rss_bytes": 4935008256,
+      "estimated_end_to_commit_seconds": {
+        "median": 4.432873048782369,
+        "p95": 6.4347442245483535,
+        "max": 7.689181919097898
+      }
+    },
+    "limitations": "原速、无中文、真实GPU串行。结束到提交使用模型估计时间，不能当声音真值；P95 4.77→6.43秒有所增加。应用构建/界面核对可能重叠CPU，非严格隔离硬件基准。"
+  },
+  "delivery": [
+    {
+      "state": "completed",
+      "segments": 7,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 7,
+        "failed": 0,
+        "disabled": 0
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 4,
+      "case": "r8-short-batch"
+    },
+    {
+      "state": "completed",
+      "segments": 10,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 10
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-short-paced"
+    },
+    {
+      "state": "completed",
+      "segments": 9,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 9
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-short-pipe"
+    },
+    {
+      "state": "completed",
+      "segments": 6,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 6
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 3,
+      "case": "pipe-pause"
+    },
+    {
+      "state": "completed",
+      "segments": 7,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 7
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 3,
+      "case": "crash-resume"
+    },
+    {
+      "state": "completed",
+      "segments": 7,
+      "samples": 720000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 7,
+        "failed": 0,
+        "disabled": 0
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-refine"
+    },
+    {
+      "state": "completed",
+      "segments": 34,
+      "samples": 2080000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 34
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-missing"
+    },
+    {
+      "state": "completed",
+      "segments": 32,
+      "samples": 1680000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 32
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-loop"
+    },
+    {
+      "state": "completed",
+      "segments": 24,
+      "samples": 3040000,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 24
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-independent"
+    },
+    {
+      "state": "completed",
+      "segments": 23,
+      "samples": 1510027,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 23
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-alignment"
+    },
+    {
+      "state": "completed",
+      "segments": 163,
+      "samples": 10883657,
+      "all_three_exports_match_effective_times": true,
+      "translation_counts": {
+        "pending": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "disabled": 163
+      },
+      "audio_hash_matches": true,
+      "timing_needs_review": 0,
+      "case": "r8-ted-full-20261001"
+    }
+  ],
+  "rejected_candidates": [
+    {
+      "candidate": "r3",
+      "errors": 89,
+      "reference_words": 126,
+      "insertions": 78,
+      "reason": "取消保护后的插入明显退化，拒绝。"
+    },
+    {
+      "candidate": "r6",
+      "errors": 37,
+      "reference_words": 385,
+      "reason": "模型词时间推进窗口丢掉真实5词重复及But；拒绝交付。"
+    },
+    {
+      "candidate": "r7",
+      "errors": 37,
+      "reference_words": 385,
+      "reason": "限制DRY范围无效，未采用。"
+    }
+  ]
+}

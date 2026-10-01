@@ -13,6 +13,8 @@ import wave
 
 from .audio import prepare_audio
 from .store import file_sha256
+from .timing import map_token
+from .quality import OutputWatch
 
 
 def validate_resources(config):
@@ -103,6 +105,9 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.vad_gate = LookbackVAD(preroll=int(config.get('vad_preroll_seconds', 1)*16000))
+            self.origin_sample = origin
+            self.output_watch = OutputWatch()
+            self.silence_start = None
             self.gated_active_samples = 0
             self.gated_silence_samples = 0
 
@@ -113,11 +118,18 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
             for event in events:
                 logging.info('VAD_EVENT %s received_sample=%s', event,
                              self.total_pcm_samples + len(pcm_array))
-            await self._send_spans(self.vad_gate.feed(pcm_array, events))
+            previous_late = self.vad_gate.late_events
+            spans = self.vad_gate.feed(pcm_array, events)
+            if self.vad_gate.late_events > previous_late:
+                store.quality_issue({'kind': 'late_vad', 'start': (self.origin_sample + self.vad_gate.emitted)/16000,
+                    'note': '语音判定迟到，先前过滤的音频未重送；原录音仍保留，请核对。'})
+            await self._send_spans(spans)
             self.total_pcm_samples += len(pcm_array)
 
         async def _send_spans(self, spans):
             for start, end, active, pcm in spans:
+                self.output_watch.span(start/16000, end/16000, active)
+                logging.info('ASR_SPAN origin=%s start=%s end=%s active=%s', self.origin_sample, start, end, active)
                 if active:
                     await self._end_silence(at_sample=start, speech_resumed=True)
                     await self._enqueue_active_audio(pcm)
@@ -126,13 +138,39 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
                     await self._begin_silence(at_sample=start)
                     self.gated_silence_samples += end-start
 
+        async def _run_counted_transcription_call(self, method, *args):
+            tokens, end = await super()._run_counted_transcription_call(method, *args)
+            logging.info('ASR_OUTPUT origin=%s media_end=%s method=%s count=%s',
+                         self.origin_sample, end, method.__name__, len(tokens))
+            for notice in getattr(self.transcription, 'quality_notices', []):
+                store.quality_issue({**notice, 'end': notice['end'] + self.origin_sample/16000,
+                    'note': '模型输出需要回放核对；文字和原录音均保留。'})
+            if hasattr(self.transcription, 'quality_notices'):
+                self.transcription.quality_notices = []
+            issue = self.output_watch.observe(end, any((t.text or '').strip() for t in tokens))
+            if issue:
+                issue['start'] += self.origin_sample/16000
+                issue['end'] += self.origin_sample/16000
+                logging.warning('ASR_QUALITY %s', issue)
+                store.quality_issue(issue)
+            return tokens, end
+
         async def _finish_input(self):
             if self.args.vac:
                 await self._send_spans(self.vad_gate.feed(np.empty(0, dtype=np.float32), final=True))
             await super()._finish_input()
 
         async def _emit_stream_event_after_snapshot(self, kind, timestamp):
+            nonlocal sequence
+            if kind == 'silence_transcription_ended':
+                if (self.silence_start is not None and timestamp - self.silence_start >= .5
+                        and store.get('pending_tokens')):
+                    store.ingest(sequence, [], final=True, complete=False, boundary='vad_pause')
+                    sequence += 1
+                self.silence_start = None
+                return
             if kind == 'silence_transcription_ready':
+                self.silence_start = timestamp
                 sample = origin + round(timestamp*16000)
                 previous = store.latest_checkpoint()
                 # Only a fully flushed silence boundary is restartable. No KV state
@@ -151,8 +189,10 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
             if tokens:
                 if first_token is None:
                     first_token = time.monotonic()-clock
-                values = [{'text': t.text or '', 'start': origin/16000 + max(0, float(t.start or 0)),
-                           'end': origin/16000 + max(0, float(t.end or t.start or 0))} for t in tokens]
+                if self is not processor:
+                    raise RuntimeError('旧识别器回调不能写入新一轮任务。')
+                values = [map_token(t.text or '', t.start, t.end, self.origin_sample,
+                    sent_samples) for t in tokens]
                 store.ingest(sequence, values)
                 sequence += 1
 

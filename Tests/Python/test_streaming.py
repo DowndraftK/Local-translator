@@ -158,7 +158,7 @@ def test_subtitle_time_carry_overlap_and_markup():
     ]}
     srt = export_subtitles(snap, 'srt')
     assert '00:01:00,000 --> 00:01:01,000' in srt
-    assert '00:01:01,000 --> 00:01:01,100' in srt
+    assert '00:01:00,800 --> 00:01:01,000' in srt
     assert '&lt;b&gt;Hello&lt;/b&gt;' in srt and '［尚未翻译］' in srt
     assert export_subtitles(snap, 'vtt').startswith('WEBVTT\n')
 

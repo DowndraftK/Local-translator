@@ -24,7 +24,7 @@ cp Vendor/argmax-oss-swift/NOTICES "$app_bundle/Contents/Resources/WhisperKit-NO
 cp Vendor/ZIPFoundation/LICENSE "$app_bundle/Contents/Resources/ZIPFoundation-LICENSE"
 mkdir -p "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator"
 cp runtime/streaming_translator/*.py "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator/"
-cp artifacts/whisperlivekit-mps-20260915/source/LICENSE "$app_bundle/Contents/Resources/WhisperLiveKit-LICENSE"
+cp artifacts/whisperlivekit-speech-quality-20260930-r8/source/LICENSE "$app_bundle/Contents/Resources/WhisperLiveKit-LICENSE"
 
 export CLANG_MODULE_CACHE_PATH="$project_root/.build/clang-module-cache"
 export SWIFT_MODULECACHE_PATH="$project_root/.build/swift-module-cache"
@@ -37,7 +37,7 @@ app=Path(sys.argv[1]); project=Path(sys.argv[2])
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.5', 'CFBundleVersion':'13',
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.6', 'CFBundleVersion':'18',
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -59,7 +59,7 @@ codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
 cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.5 扫描型 PDF 显式 OCR 与 整篇翻译测试版
+本地翻译器 — 0.2.6 语音内容与时间可靠性测试版
 
 双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
 应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
@@ -76,7 +76,8 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 本包可在这台 Mac 上移动使用；换到其他机器仍需另行准备 Ollama 和模型。
 
 这是使用本机临时签名生成的自用测试包，未经过 Developer ID 公证或公开分发验收。
-当前仍有识别错词、模型条件误译和估计时间戳交叠等问题。请核对原文与录音，勿把“处理完成”等同于质量验收。
+语音保留原始时间依据，异常时间会提示核对；回放与 TXT/SRT/VTT 使用同一有效时间，导出不再累计顺延交叠。
+当前仍有识别错词、连续漏词、模型循环与估计时间偏差等待验证问题。请核对原文与录音，勿把“处理完成”等同于质量验收。
 新的录音任务保存在 ~/Library/Application Support/LocalTranslator/Recordings。可暂停/继续录音；设备变化或休眠会暂停，请手动继续。
 “仅录音，稍后识别”可先保存音频；中断任务可点击“继续识别”，从最近已保存的安全位置重做尾部。若没有检查点，会从头识别；旧尾部保存在数据库恢复记录中。
 超过 200 段的字幕可分页浏览，导出始终包含全部段落。

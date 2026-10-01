@@ -15,6 +15,15 @@ struct StreamingSegment: Decodable, Identifiable {
     let boundary: String
     let translation_state: String
     let translation_error: String?
+    let timing_status: String?
+    let timing_note: String?
+}
+
+struct StreamingQualityIssue: Decodable {
+    let kind: String
+    let start: Double?
+    let end: Double?
+    var playbackTime: Double { start ?? max(0, (end ?? 0) - 10) }
 }
 
 struct StreamingSnapshot: Decodable {
@@ -34,6 +43,8 @@ struct StreamingSnapshot: Decodable {
     let asr_error: String?
     let error: String?
     let asr_complete: Bool?
+    let quality_issue_count: Int?
+    let quality_issues: [StreamingQualityIssue]?
     let translation_counts: [String: Int]?
     let segment_count: Int?
     let segment_offset: Int?
@@ -109,8 +120,8 @@ struct StreamingSnapshot: Decodable {
                 folder = destination; snapshot = nil; userStopped = false
                 let project = URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()
                 let config: [String: Any] = [
-                    "source": project.appendingPathComponent("artifacts/whisperlivekit-mps-20260915/source").path,
-                    "source_manifest": project.appendingPathComponent("artifacts/whisperlivekit-mps-20260915/patched-source.json").path,
+                    "source": project.appendingPathComponent("artifacts/whisperlivekit-speech-quality-20260930-r8/source").path,
+                    "source_manifest": project.appendingPathComponent("artifacts/whisperlivekit-speech-quality-20260930-r8/patched-source.json").path,
                     "model": project.appendingPathComponent("models/whisper-mps-experiment/large-v3-turbo").path,
                     "model_manifest": project.appendingPathComponent("experiments/whisperlivekit/mps-model-manifest.json").path,
                     "device": useCPU ? "cpu" : "mps", "dtype": "float32", "max_context_tokens": 128]

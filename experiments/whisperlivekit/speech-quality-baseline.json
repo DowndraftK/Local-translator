@@ -1,0 +1,6 @@
+{
+  "whisperlivekit/simul_whisper/align_att_base.py": "100d9cdd32688da2578844236b50bedf0183a2cd650c5dc8a0f3676581d645d5",
+  "whisperlivekit/simul_whisper/simul_whisper.py": "64ebc722bdcaa609369530f9d2f95e87622d2b3d8a895b6dd4f83ee24c72f916",
+  "whisperlivekit/simul_whisper/decoder_state.py": "0ed2928dc5b41d4833abe060e71dae0788733a4d04fab7b193084756287bf591",
+  "whisperlivekit/audio_processor.py": "53fcbde5f0b82c4258a69f3d1b6d74dc4a2413dc04b57bde6ba95d4bb1ae1659"
+}

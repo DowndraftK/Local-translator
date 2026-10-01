@@ -1,6 +1,8 @@
 """Conservative sentence boundaries over confirmed ASR tokens, never drafts."""
 import re
 
+from .timing import segment_timing
+
 
 ABBREVIATIONS = {"mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "no", "fig", "approx", "inc"}
 
@@ -63,6 +65,7 @@ def take_segments(tokens, final=False, max_seconds=30, max_chars=1200):
         # are not speech and must not create subtitle rows or translation jobs.
         # The original event payload remains in SessionStore for inspection.
         if any(char.isalnum() for char in source):
-            segments.append({'english': source, 'start': min(t['start'] for t in selected),
-                             'end': max(t['end'] for t in selected), 'boundary': reason})
+            start, end, timing = segment_timing(selected)
+            segments.append({'english': source, 'start': start, 'end': end,
+                             'boundary': reason, 'timing': timing})
     return segments, tokens

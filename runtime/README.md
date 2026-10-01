@@ -1,6 +1,6 @@
 # 本机流式字幕运行环境
 
-更新：2026-09-23。原生应用已接入此目录，使用本机 Python 工作进程；无需启动 WhisperLiveKit Web 服务。
+更新：2026-09-30，0.2.6。原生应用已接入此目录，使用本机 Python 工作进程；无需启动 WhisperLiveKit Web 服务。
 
 ## 在应用中使用
 
@@ -11,7 +11,7 @@
 5. 麦克风可以暂停、继续，设备变化或休眠后需主动继续；勾选“仅录音，稍后识别”可以先保存音频。已保存任务识别中断时可点击“继续识别”。
 6. 点击片段左侧时间可回放；修改英文后旧译文失效，点击继续补译。修改前的英文保留在数据库中，当前界面还没有完整版本历史浏览器。
 7. 完成后可选择“录后重新校对”：用整段保存的音频再次识别，并在**独立的新任务**中生成中文。点击“查看原版”可以返回原字幕；原目录和文字不被覆盖。校对可补救流式漏词，但仍须核对原音频。
-8. 通过“导出”保存双语 TXT、SRT 或 WebVTT。时间戳来自模型估计；导出会顺延交叠字幕，以保持播放器可接受的时间顺序。
+8. 通过“导出”保存双语 TXT、SRT 或 WebVTT。页面回放与三种导出共用有效媒体时间；保留交叠，不再逐段顺延。异常时间会提示核对，处理结束不代表内容或声音定位准确。
 
 录音任务默认保存在 `~/Library/Application Support/LocalTranslator/Recordings/<UUID>/`。界面的“打开任务目录”可直接定位。备份时复制整个目录，包含数据库、录音和运行配置；任务运行中不宜只复制数据库主文件，因为未合并事务可能位于 WAL 文件中。
 
@@ -22,8 +22,8 @@
 | 资源 | 项目内位置 |
 | --- | --- |
 | Python 3.12 环境 | `artifacts/whisperlivekit-gpu-review-20260915/venv` |
-| 固定 WhisperLiveKit 补丁源码 | `artifacts/whisperlivekit-mps-20260915/source` |
-| 补丁指纹 | `artifacts/whisperlivekit-mps-20260915/patched-source.json` |
+| 固定 WhisperLiveKit 补丁源码 | `artifacts/whisperlivekit-speech-quality-20260930-r8/source` |
+| 补丁指纹 | `artifacts/whisperlivekit-speech-quality-20260930-r8/patched-source.json` |
 | MLX large-v3-turbo 权重 | `models/whisper-mps-experiment/large-v3-turbo` |
 | 模型基线 | `experiments/whisperlivekit/mps-model-manifest.json` |
 | 中文模型 | 本机 Ollama 中的 `hy-mt2:1.8b-q8` |
@@ -72,9 +72,35 @@ bash scripts/swift.sh test
 - 任务锁阻止同时修改同一任务。翻译租约和源文字版本校验阻止旧请求覆盖新修订。
 - “继续补译”只恢复翻译队列。“继续识别”从已排空的静音/暂停检查点恢复已保存音频；先校验资源和音频，再把不确定尾部归档到 `recovery_history` 后重做。没有检查点则从头重做，保留旧内容恢复记录；不恢复任意位置的模型内部状态，也不继续已结束任务的麦克风采集。
 - `capture-events.jsonl` 记录暂停/继续的样本位置及实际时刻；暂停期间不补假静音。WAV 时间轴只包含实际录音，墙钟缺口保存在事件日志中。
-- 数据库版本 2 自动兼容原数据库，拒绝更新的未知版本。界面每页 200 段、支持查看早期字幕，导出始终包含全部段落。
+- 数据库版本 3 自动兼容版本 1/2 的原数据库，新增段落时间证据；旧任务缺失证据标为未知，拒绝更新的未知版本。界面每页 200 段、支持查看早期字幕，导出始终包含全部段落。
 - 录后校对复制音频，避免原目录清理后丢失回放来源。停止校对会等待当前模型调用退出，可能需几十秒；不会把未提交完的识别标成完成。
 - 录后整段解码目前限两小时，内存随音频长度增加；这只是实现上限，尚未通过两小时验收。录中字幕仍按有界音频缓冲处理。
+
+## 0.2.6 修复与重建
+
+本轮修正已确认词被时间/字符串保护误删、停顿后续写强制屏蔽结束标记、音频块与识别批次不对应的窗口推进（按确认批次的实际输入终点淘汰前缀，不用模型词估计时间），以及长静音后使用词估计作为媒体原点。保留真实重复与原始事件，模型本身仍可能漏词、错词或产生多余词。
+
+VAD 排空后的真实静音持续至少 0.5 秒时，已确认而无标点的文字以“停顿暂分”保存，避免几句合并导致回放过早；这是保守片段边界，仍需核对上下文。VAD 有前后保留量，这个阈值不是说话人停顿总时长。持续活跃音频无确认词、模型回退等问题会显示最近回放位置。原始估计、有效值和依据保存在 `segment_timing`，不会为了导出顺序累计挪动后续字幕。
+
+新任务使用以下固定目录。旧任务继续识别仍沿用自身 `runtime.json` 和检查点资源指纹，不偷偷切换补丁或复用不匹配的检查点；若需对照新版，请导入已保存 WAV 创建新任务。录后校对始终另建版本。
+
+```sh
+python3 experiments/whisperlivekit/prepare_speech_quality.py \
+  --source artifacts/whisperlivekit-review-20260915/WhisperLiveKit-363e4f6d029694d9c81ae548beddd9d3c88a3637 \
+  --destination artifacts/whisperlivekit-speech-quality-20260930-r8/source
+```
+
+目标目录必须不存在。脚本先校验固定上游与额外变更文件指纹，再生成 MPS/质量补丁和全部 Python 源码清单；不会覆盖旧安装，也不在运行时重新封存已改代码。此补丁针对当前 PyTorch 解码路径，不启用 full-MLX 流式解码。
+
+补丁与窗口逻辑回归：
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  artifacts/whisperlivekit-gpu-review-20260915/venv/bin/python -m pytest \
+  -q -p no:cacheprovider experiments/whisperlivekit/test_speech_quality_patch.py
+```
+
+本轮0.2.6/build18的73项Python、42项Swift通过（另1项OCR跳过），有限GPU串行实测和最终包检查完成；起点P95未达到1.5秒，独立材料歌词及模拟暂停尾部仍漏识别，历史长状态故障未关闭。完整对照、未达到的时间目标及剩余故障见 [0.2.6 开发记录](../docs/0.2.6语音质量开发记录.md)。
 
 ## 已知范围
 

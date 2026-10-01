@@ -37,7 +37,7 @@ def main():
                 time.sleep(.1)
             start, offset = time.monotonic(), 0
             # Irregular transport writes, including a final short PCM packet.
-            sizes = [3198, 6402, 16000, 258]
+            sizes = [997, 6401, 16000, 259]
             count = 0
             while offset < len(expected):
                 data = expected[offset:offset+sizes[count % len(sizes)]]
