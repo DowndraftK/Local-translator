@@ -24,7 +24,7 @@ cp Vendor/argmax-oss-swift/NOTICES "$app_bundle/Contents/Resources/WhisperKit-NO
 cp Vendor/ZIPFoundation/LICENSE "$app_bundle/Contents/Resources/ZIPFoundation-LICENSE"
 mkdir -p "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator"
 cp runtime/streaming_translator/*.py "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator/"
-cp artifacts/whisperlivekit-speech-quality-20260930-r8/source/LICENSE "$app_bundle/Contents/Resources/WhisperLiveKit-LICENSE"
+cp artifacts/whisperlivekit-speech-repair-20261001-final/source/LICENSE "$app_bundle/Contents/Resources/WhisperLiveKit-LICENSE"
 
 export CLANG_MODULE_CACHE_PATH="$project_root/.build/clang-module-cache"
 export SWIFT_MODULECACHE_PATH="$project_root/.build/swift-module-cache"
@@ -37,7 +37,7 @@ app=Path(sys.argv[1]); project=Path(sys.argv[2])
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.6', 'CFBundleVersion':'18',
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.6', 'CFBundleVersion':'21',
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -77,7 +77,7 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 
 这是使用本机临时签名生成的自用测试包，未经过 Developer ID 公证或公开分发验收。
 语音保留原始时间依据，异常时间会提示核对；回放与 TXT/SRT/VTT 使用同一有效时间，导出不再累计顺延交叠。
-当前仍有识别错词、连续漏词、模型循环与估计时间偏差等待验证问题。请核对原文与录音，勿把“处理完成”等同于质量验收。
+本版修正回退撤销识别进度、快速输入窗口跳过和终结尾词，并改善字幕起点。模型仍会错词、漏识别音乐歌词或产生异常重复，需要核对实际声音。请核对原文与录音，勿把“处理完成”等同于质量验收。
 新的录音任务保存在 ~/Library/Application Support/LocalTranslator/Recordings。可暂停/继续录音；设备变化或休眠会暂停，请手动继续。
 “仅录音，稍后识别”可先保存音频；中断任务可点击“继续识别”，从最近已保存的安全位置重做尾部。若没有检查点，会从头识别；旧尾部保存在数据库恢复记录中。
 超过 200 段的字幕可分页浏览，导出始终包含全部段落。

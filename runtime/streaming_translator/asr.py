@@ -192,7 +192,7 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
                 if self is not processor:
                     raise RuntimeError('旧识别器回调不能写入新一轮任务。')
                 values = [map_token(t.text or '', t.start, t.end, self.origin_sample,
-                    sent_samples) for t in tokens]
+                    sent_samples, alignment=getattr(t, 'alignment_evidence', None)) for t in tokens]
                 store.ingest(sequence, values)
                 sequence += 1
 

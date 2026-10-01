@@ -240,8 +240,8 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s', stream=sys.stderr)
     if args.command == 'configure':
         root = args.project.resolve()
-        config = {'source': str(root/'artifacts/whisperlivekit-speech-quality-20260930-r8/source'),
-                  'source_manifest': str(root/'artifacts/whisperlivekit-speech-quality-20260930-r8/patched-source.json'),
+        config = {'source': str(root/'artifacts/whisperlivekit-speech-repair-20261001-final/source'),
+                  'source_manifest': str(root/'artifacts/whisperlivekit-speech-repair-20261001-final/patched-source.json'),
                   'model': str(root/'models/whisper-mps-experiment/large-v3-turbo'),
                   'model_manifest': str(root/'experiments/whisperlivekit/mps-model-manifest.json'),
                   'device': 'mps', 'dtype': 'float32', 'max_context_tokens': 128}

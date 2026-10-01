@@ -1,0 +1,598 @@
+{
+  "date": "2026-10-01",
+  "version": "0.2.6",
+  "build": 21,
+  "status": "Completed targeted validation with explicit residual limitations; not M0 acceptance",
+  "scope": "Three speech repair items; one repeated TED and short existing fixtures, not a classroom corpus or MT quality evaluation",
+  "source": {
+    "variant": "bounded-acoustic-terminal",
+    "max_inference_audio_seconds": 1.0,
+    "prefix_retention": "input-horizon",
+    "terminal_padding_room": true,
+    "deterministic_rebuild_python_hashes": 103
+  },
+  "automatic": {
+    "python_runtime": 64,
+    "python_pinned_methods": 20,
+    "swift_passed": 42,
+    "swift_optional_ocr_skipped": 1
+  },
+  "diagnostic_380s": {
+    "reference_words": 1098,
+    "before": {
+      "S": 17,
+      "D": 47,
+      "I": 7,
+      "errors": 71,
+      "WER": 0.06466302367941712
+    },
+    "keep_accepted_progress": {
+      "S": 19,
+      "D": 5,
+      "I": 7,
+      "errors": 31,
+      "WER": 0.028233151183970857
+    },
+    "confirmed_late_rewind_empty_outputs_before": 37
+  },
+  "batch_130s": {
+    "before": {
+      "reference_words": 385,
+      "S": 3,
+      "D": 192,
+      "I": 0,
+      "errors": 195,
+      "WER": 0.5064935064935064,
+      "longest_deleted_run": 100
+    },
+    "final": {
+      "reference_words": 385,
+      "hypothesis_words": 387,
+      "word_error_rate": 0.07532467532467532,
+      "errors": 29,
+      "counts": {
+        "deletion": 8,
+        "substitution": 11,
+        "insertion": 10
+      },
+      "longest_consecutive_deleted_words": 7
+    },
+    "limitations": "One internal deletion and seven at a cut endpoint with reference uncertainty; batch submit lags are not real-time latency."
+  },
+  "short_45s": {
+    "delivery-short": {
+      "reference_words": 117,
+      "hypothesis_words": 119,
+      "word_error_rate": 0.02564102564102564,
+      "errors": 3,
+      "counts": {
+        "insertion": 2,
+        "substitution": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    },
+    "delivery-short-paced": {
+      "reference_words": 117,
+      "hypothesis_words": 119,
+      "word_error_rate": 0.02564102564102564,
+      "errors": 3,
+      "counts": {
+        "insertion": 2,
+        "substitution": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    },
+    "delivery-short-pipe": {
+      "reference_words": 117,
+      "hypothesis_words": 116,
+      "word_error_rate": 0.05128205128205128,
+      "errors": 6,
+      "counts": {
+        "insertion": 1,
+        "substitution": 3,
+        "deletion": 2
+      },
+      "longest_consecutive_deleted_words": 1
+    },
+    "delivery-refine": {
+      "reference_words": 117,
+      "hypothesis_words": 118,
+      "word_error_rate": 0.02564102564102564,
+      "errors": 3,
+      "counts": {
+        "substitution": 2,
+        "insertion": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    }
+  },
+  "pause_and_recovery": {
+    "source": "r5b Python hashes identical to final source",
+    "pause": {
+      "reference_words": 117,
+      "hypothesis_words": 121,
+      "word_error_rate": 0.042735042735042736,
+      "errors": 5,
+      "counts": {
+        "insertion": 4,
+        "substitution": 1
+      },
+      "longest_consecutive_deleted_words": 0
+    },
+    "crash_resume": {
+      "reference_words": 117,
+      "hypothesis_words": 117,
+      "word_error_rate": 0.0,
+      "errors": 0,
+      "counts": {},
+      "longest_consecutive_deleted_words": 0
+    },
+    "all_samples": 720000,
+    "pause_checkpoint_sample": 240000,
+    "recovery_checkpoint_sample": 237952,
+    "preserved_prefix_segments": 2,
+    "scope": "Controlled PCM transport, not physical microphone acceptance"
+  },
+  "independent_190s": {
+    "before": {
+      "reference_words": 443,
+      "S": 4,
+      "D": 70,
+      "I": 2,
+      "errors": 76,
+      "WER": 0.17155756207674944,
+      "longest_deleted_run": 57
+    },
+    "final": {
+      "reference_words": 443,
+      "hypothesis_words": 375,
+      "word_error_rate": 0.17381489841986456,
+      "errors": 77,
+      "counts": {
+        "deletion": 70,
+        "substitution": 5,
+        "insertion": 2
+      },
+      "longest_consecutive_deleted_words": 57
+    },
+    "unresolved": "Music lyrics, including a negation, remain omitted; not counted as repaired"
+  },
+  "alignment": {
+    "scope": "Twenty frozen synthetic waveform anchors; independent reference uncertainty +-80ms, not human annotations of real classroom speech",
+    "pause_sample": 809629,
+    "wall_pause_gap_seconds": 95,
+    "fake_silence_in_wav": false,
+    "strict": {
+      "total_anchors": 20,
+      "matched": 17,
+      "unmatched": [
+        4,
+        9,
+        15
+      ],
+      "start": {
+        "n": 17,
+        "signed_mean": -0.05718382352941015,
+        "signed_median": -0.006875000000000853,
+        "absolute_median": 0.007624999999997328,
+        "absolute_p95": 0.9991250000000003,
+        "absolute_max": 0.9991250000000003
+      },
+      "end": {
+        "n": 17,
+        "signed_mean": -0.2532794117647037,
+        "signed_median": -0.25918749999999946,
+        "absolute_median": 0.25918749999999946,
+        "absolute_p95": 0.41093749999999574,
+        "absolute_max": 0.41093749999999574
+      },
+      "over_two_seconds": [],
+      "early_over_half_second": [
+        1
+      ]
+    },
+    "spoken_written_equivalents": {
+      "total_anchors": 20,
+      "matched": 20,
+      "unmatched": [],
+      "start": {
+        "n": 20,
+        "signed_mean": -0.04939999999999869,
+        "signed_median": -0.006374999999998465,
+        "absolute_median": 0.0072499999999990905,
+        "absolute_p95": 0.11468749999999517,
+        "absolute_max": 0.9991250000000003
+      },
+      "end": {
+        "n": 20,
+        "signed_mean": -0.2581031249999982,
+        "signed_median": -0.26034375000000054,
+        "absolute_median": 0.26034375000000054,
+        "absolute_p95": 0.36343749999999986,
+        "absolute_max": 0.41093749999999574
+      },
+      "over_two_seconds": [],
+      "early_over_half_second": [
+        1
+      ]
+    }
+  },
+  "delivery": {
+    "package_signature": true,
+    "zip_integrity": true,
+    "bundle_python_byte_matches": 13,
+    "release_app_and_worker_match": true,
+    "actual_UI_build": 21,
+    "app": "dist/M0-20261001-170825-release/本地翻译器.app",
+    "zip": "dist/M0-20261001-170825-release/本地翻译器-M0.zip",
+    "recorded_and_reopened_UI_stop": true,
+    "safe_prefix_retained_segments": 2,
+    "independent_refinement_original_preserved": true,
+    "three_UI_exports_match_revised_pending_rows": true,
+    "UI_250_rows_export_all_formats": true,
+    "legacy_copy_opened": true,
+    "revised_real_translation_pending_after_long_test": false,
+    "completed_UI_three_exports_match": true,
+    "seven_untouched_rows_unchanged": true,
+    "revised_real_translation": true
+  },
+  "limitations": [
+    "Historical fifth-cycle loop is not uniquely explained by the old logs; one non-reproduction cannot prove all model loops fixed",
+    "First synthetic sentence still starts about one second early",
+    "Physical microphone pause/continue, classroom and overall M0 acceptance not performed in this round"
+  ],
+  "targeted_57m": {
+    "scope": "One TED repeated with two seconds of silence; not independent samples or classroom/MT acceptance.",
+    "normalization": "Unchanged summarize_ted.words/word_errors. Numeral and contraction spellings remain errors.",
+    "round_assignment": "Saved effective segment start within repeat intervals; timestamps are estimates, not speech truth.",
+    "complete": true,
+    "full_rounds_scored": 5,
+    "rounds": [
+      {
+        "repetition": 1,
+        "start": 0.0,
+        "end": 682.2285625,
+        "segments": 165,
+        "reference_words": 1950,
+        "hypothesis_words": 1962,
+        "word_error_rate": 0.02205128205128205,
+        "errors": 43,
+        "counts": {
+          "insertion": 17,
+          "substitution": 21,
+          "deletion": 5
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      {
+        "repetition": 2,
+        "start": 682.2285625,
+        "end": 1364.457125,
+        "segments": 162,
+        "reference_words": 1950,
+        "hypothesis_words": 1959,
+        "word_error_rate": 0.018461538461538463,
+        "errors": 36,
+        "counts": {
+          "insertion": 14,
+          "substitution": 17,
+          "deletion": 5
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      {
+        "repetition": 3,
+        "start": 1364.457125,
+        "end": 2046.6856874999999,
+        "segments": 160,
+        "reference_words": 1950,
+        "hypothesis_words": 1956,
+        "word_error_rate": 0.021025641025641025,
+        "errors": 41,
+        "counts": {
+          "insertion": 13,
+          "substitution": 21,
+          "deletion": 7
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      {
+        "repetition": 4,
+        "start": 2046.6856875,
+        "end": 2728.91425,
+        "segments": 168,
+        "reference_words": 1950,
+        "hypothesis_words": 1962,
+        "word_error_rate": 0.021025641025641025,
+        "errors": 41,
+        "counts": {
+          "insertion": 17,
+          "substitution": 19,
+          "deletion": 5
+        },
+        "longest_consecutive_deleted_words": 1
+      },
+      {
+        "repetition": 5,
+        "start": 2728.91425,
+        "end": 3411.1428124999998,
+        "segments": 161,
+        "reference_words": 1950,
+        "hypothesis_words": 1960,
+        "word_error_rate": 0.02,
+        "errors": 39,
+        "counts": {
+          "insertion": 15,
+          "substitution": 19,
+          "deletion": 5
+        },
+        "longest_consecutive_deleted_words": 1
+      }
+    ],
+    "total_reference_words": 9750,
+    "total_errors": 200,
+    "counts": {
+      "insertion": 76,
+      "substitution": 97,
+      "deletion": 27
+    },
+    "word_error_rate": 0.020512820512820513,
+    "input_samples": 54720000,
+    "received_pcm_samples": 54720000,
+    "translation_counts": {
+      "pending": 0,
+      "running": 0,
+      "completed": 818,
+      "failed": 0,
+      "disabled": 0
+    },
+    "warnings": {},
+    "three_consecutive_ngram_screen": {
+      "segments": [],
+      "events": [],
+      "note": "Zero does not rule out every loop; hits need acoustic review and may be real repetition."
+    },
+    "performance": {
+      "asr_elapsed_seconds": 3421.2265090830006,
+      "asr_tail_seconds": 1.221374917000503,
+      "asr_call_seconds": 3290.7954088660917,
+      "asr_calls": 4398,
+      "queue_peak_seconds": 7.0,
+      "load_seconds": 2.0412846250001166,
+      "estimated_english_end_lag": {
+        "median": 5.019630499840105,
+        "p95": 8.903899152755912,
+        "max": 12.43228001785269
+      },
+      "estimated_chinese_end_lag": {
+        "median": 5.579511837005725,
+        "p95": 9.330359354019265,
+        "max": 12.849935009002593
+      }
+    },
+    "latency_note": "Submission lags use model-estimated ends; they are not independent acoustic latency measurements.",
+    "checks": {
+      "sqlite_integrity": true,
+      "foreign_keys_valid": true,
+      "translation_revision_mismatches": 0,
+      "event_sequences_contiguous": true,
+      "original_events_match_saved_and_pending_characters": true,
+      "replayed_segments_match_saved_rows": true,
+      "replayed_pending_matches": true,
+      "event_word_spacing_differs": false,
+      "timing_evidence_count": 818
+    },
+    "timing": {
+      "effective_start_rewinds": 0,
+      "effective_overlaps": 8,
+      "needs_review": 74
+    },
+    "additional_checks": {
+      "exact_repeated_source_pcm": true,
+      "runtime_snapshot_hashes_match": true,
+      "all_samples": 54720000,
+      "late_rewind_kept_accepted_words": 4,
+      "accepted_prefix_erased": 0,
+      "vad_counts_sum_to_input": true
+    },
+    "windows": [
+      {
+        "case": "historical-missing",
+        "input_range": [
+          930,
+          1060
+        ],
+        "calls": 139,
+        "stop_reasons": {
+          "eot": 45,
+          "attention_horizon": 93,
+          "attention_rewind": 1
+        },
+        "late_rewind_kept_accepted_words": 1,
+        "accepted_prefix_erased": 0,
+        "empty_calls": 15,
+        "note": "A single empty call can be the normal wait for future audio; content scoring and event evidence remain necessary."
+      },
+      {
+        "case": "historical-loop",
+        "input_range": [
+          3280,
+          3385
+        ],
+        "calls": 153,
+        "stop_reasons": {
+          "attention_horizon": 92,
+          "eot": 61
+        },
+        "late_rewind_kept_accepted_words": 0,
+        "accepted_prefix_erased": 0,
+        "empty_calls": 26,
+        "note": "A single empty call can be the normal wait for future audio; content scoring and event evidence remain necessary."
+      }
+    ],
+    "resources": {
+      "backlog_seconds": {
+        "n": 6648,
+        "median": 3.5,
+        "p95": 7.5,
+        "max": 11.852
+      },
+      "worker_rss_gib": {
+        "n": 6655,
+        "median": 4.3123626708984375,
+        "p95": 4.74920654296875,
+        "max": 4.822235107421875
+      },
+      "process_peak_rss_gib": 4.82232666015625,
+      "translation_outstanding": {
+        "n": 6656,
+        "median": 0.0,
+        "p95": 1,
+        "max": 2
+      },
+      "swap_used_mib": {
+        "n": 341,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0
+      },
+      "thermal_records": {
+        "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded": 341
+      }
+    },
+    "ten_minute_bins": [
+      {
+        "minutes": [
+          0,
+          10
+        ],
+        "backlog": {
+          "n": 1176,
+          "median": 4.0,
+          "p95": 7.0,
+          "max": 7.836
+        },
+        "rss_gib": {
+          "n": 1176,
+          "median": 3.9160308837890625,
+          "p95": 4.1083831787109375,
+          "max": 4.1160125732421875
+        }
+      },
+      {
+        "minutes": [
+          10,
+          20
+        ],
+        "backlog": {
+          "n": 1167,
+          "median": 4.0,
+          "p95": 8.162,
+          "max": 11.592
+        },
+        "rss_gib": {
+          "n": 1167,
+          "median": 4.3756103515625,
+          "p95": 4.5061798095703125,
+          "max": 4.529266357421875
+        }
+      },
+      {
+        "minutes": [
+          20,
+          30
+        ],
+        "backlog": {
+          "n": 1165,
+          "median": 3.5,
+          "p95": 8.0,
+          "max": 11.852
+        },
+        "rss_gib": {
+          "n": 1165,
+          "median": 4.7239990234375,
+          "p95": 4.8168487548828125,
+          "max": 4.822235107421875
+        }
+      },
+      {
+        "minutes": [
+          30,
+          40
+        ],
+        "backlog": {
+          "n": 1164,
+          "median": 3.0,
+          "p95": 4.0,
+          "max": 11.612
+        },
+        "rss_gib": {
+          "n": 1164,
+          "median": 4.352699279785156,
+          "p95": 4.4349822998046875,
+          "max": 4.445404052734375
+        }
+      },
+      {
+        "minutes": [
+          40,
+          50
+        ],
+        "backlog": {
+          "n": 1162,
+          "median": 3.0,
+          "p95": 4.0,
+          "max": 11.404
+        },
+        "rss_gib": {
+          "n": 1162,
+          "median": 4.47271728515625,
+          "p95": 4.5258026123046875,
+          "max": 4.5855560302734375
+        }
+      },
+      {
+        "minutes": [
+          50,
+          57
+        ],
+        "backlog": {
+          "n": 813,
+          "median": 3.0,
+          "p95": 4.0,
+          "max": 11.664
+        },
+        "rss_gib": {
+          "n": 813,
+          "median": 4.0040740966796875,
+          "p95": 4.062896728515625,
+          "max": 4.067657470703125
+        }
+      }
+    ],
+    "content": {
+      "normalized_negative_word_errors_per_full_round": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "timing_issue_counts": {
+        "zero_duration": 74
+      },
+      "scope": "Negative spelling checks are not overall semantic/translation assessment; timestamp marks are model evidence, not acoustic truth"
+    },
+    "baseline_r8": {
+      "counts": {
+        "substitution": 125,
+        "deletion": 309,
+        "insertion": 71
+      },
+      "errors": 505,
+      "reference_words": 9750,
+      "WER": 0.05179487179487179,
+      "longest_deleted_run": 30
+    }
+  }
+}

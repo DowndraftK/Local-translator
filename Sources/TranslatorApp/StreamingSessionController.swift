@@ -120,8 +120,8 @@ struct StreamingSnapshot: Decodable {
                 folder = destination; snapshot = nil; userStopped = false
                 let project = URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()
                 let config: [String: Any] = [
-                    "source": project.appendingPathComponent("artifacts/whisperlivekit-speech-quality-20260930-r8/source").path,
-                    "source_manifest": project.appendingPathComponent("artifacts/whisperlivekit-speech-quality-20260930-r8/patched-source.json").path,
+                    "source": project.appendingPathComponent("artifacts/whisperlivekit-speech-repair-20261001-final/source").path,
+                    "source_manifest": project.appendingPathComponent("artifacts/whisperlivekit-speech-repair-20261001-final/patched-source.json").path,
                     "model": project.appendingPathComponent("models/whisper-mps-experiment/large-v3-turbo").path,
                     "model_manifest": project.appendingPathComponent("experiments/whisperlivekit/mps-model-manifest.json").path,
                     "device": useCPU ? "cpu" : "mps", "dtype": "float32", "max_context_tokens": 128]

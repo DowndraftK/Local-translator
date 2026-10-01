@@ -10,13 +10,19 @@ def finite(value):
         return None
 
 
-def map_token(text, start, end, origin_sample, received_sample):
+def map_token(text, start, end, origin_sample, received_sample, alignment=None):
     """Apply the processor-local origin exactly once; preserve its raw estimate."""
     origin = origin_sample / 16000
-    return validate_token({'text': text, 'start': None if finite(start) is None else origin + float(start),
+    token = {'text': text, 'start': None if finite(start) is None else origin + float(start),
         'end': None if finite(end) is None else origin + float(end),
-        'raw_local': {'start': repr(start), 'end': repr(end), 'origin_sample': origin_sample}},
-        duration=received_sample / 16000, floor=origin)
+        'raw_local': {'start': repr(start), 'end': repr(end), 'origin_sample': origin_sample}}
+    if alignment:
+        token['timing_raw'] = {'start': origin + alignment['raw_start'],
+                               'end': origin + alignment['raw_end']}
+        token['alignment'] = {**alignment, 'origin_sample': origin_sample,
+            'global_window_start': origin + alignment['window_start'],
+            'global_window_end': origin + alignment['window_end']}
+    return validate_token(token, duration=received_sample / 16000, floor=origin)
 
 
 def validate_token(token, duration=None, floor=0):
@@ -54,12 +60,15 @@ def validate_token(token, duration=None, floor=0):
 def segment_timing(tokens):
     spoken = [t for t in tokens if any(c.isalnum() for c in t['text'])]
     raw = [{'text': t['text'], 'estimate': t.get('timing_raw', {'start': t['start'], 'end': t['end']}),
-            'local': t.get('raw_local')} for t in tokens]
+            'local': t.get('raw_local'), **({'alignment': t['alignment']} if t.get('alignment') else {})}
+           for t in tokens]
     issues = {issue for t in tokens for issue in t.get('timing_issues', [])}
     if any(b['start'] < a['start'] - .75 for a, b in zip(spoken, spoken[1:])):
         issues.add('token_time_rewind')
     start, end = min(t['start'] for t in spoken), max(t['end'] for t in spoken)
     reasons = []
+    if any(t.get('alignment') for t in spoken):
+        reasons.append('same_model_attention_alignment')
     if start != min(t['start'] for t in tokens) or end != max(t['end'] for t in tokens):
         reasons.append('punctuation_has_no_speech_extent')
     return start, end, {'raw_tokens': raw, 'issues': sorted(issues), 'reasons': reasons,

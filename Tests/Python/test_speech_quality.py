@@ -27,6 +27,24 @@ def test_time_origin_applied_once_and_raw_local_evidence_kept(tmp_path):
     store.close()
 
 
+def test_same_model_alignment_preserves_raw_estimate_and_applies_resume_origin_once(tmp_path):
+    store = session(tmp_path)
+    alignment = {'raw_start': 0.1, 'raw_end': 0.3, 'method': 'same_model_attention_dtw',
+                 'window_start': 0, 'window_end': 4}
+    token = map_token('After a pause.', 2, 3, 160000, 240000, alignment=alignment)
+    store.ingest(0, [token], final=True)
+    row = store.snapshot()['segments'][0]
+    assert (row['start'], row['end']) == (12, 13)
+    evidence = json.loads(store.db.execute('SELECT evidence FROM segment_timing').fetchone()[0])
+    assert evidence['raw_tokens'][0]['estimate'] == {'start': 10.1, 'end': 10.3}
+    assert evidence['raw_tokens'][0]['alignment']['global_window_start'] == 10
+    assert evidence['raw_tokens'][0]['alignment']['global_window_end'] == 14
+    assert 'same_model_attention_alignment' in evidence['reasons']
+    for kind in ('txt', 'srt', 'vtt'):
+        assert 'After a pause.' in export_subtitles(store.snapshot(), kind)
+    store.close()
+
+
 @pytest.mark.parametrize('start,end', [(float('nan'), 5), (-1, 3), (6, 2), (19, 40), (20, 20), (float('inf'), None)])
 def test_invalid_estimate_keeps_words_raw_evidence_and_bounded_exports(tmp_path, start, end):
     store = session(tmp_path)
