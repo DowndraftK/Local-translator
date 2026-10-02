@@ -9,6 +9,7 @@ import time
 import wave
 
 from .store import SessionStore, atomic_json, file_sha256
+from .translation_config import saved_recipe
 
 
 def initialize_refinement(store, parent):
@@ -22,6 +23,7 @@ def initialize_refinement(store, parent):
         if not original.get('session_id'):
             raise ValueError('原任务尚未建立。')
         store.initialize(translation_model=original.get('translation_model'),
+            translation_configuration=saved_recipe(original) if original.get('translation_model') else None,
             endpoint=original.get('endpoint'), input_kind='refinement',
             parent_session_id=original.get('session_id'), parent_session_path=str(parent),
             parent_asr_complete=original.get('asr_complete', False),

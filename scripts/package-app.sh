@@ -50,7 +50,7 @@ build_number=int((app.parent/'build-number.txt').read_text())
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.7', 'CFBundleVersion':str(build_number),
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.8', 'CFBundleVersion':str(build_number),
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -72,7 +72,7 @@ codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
 cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.7 文字文档保存恢复测试版
+本地翻译器 — 0.2.8 翻译质量评审与模型优化测试版
 
 双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
 应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
@@ -83,6 +83,8 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 麦克风仅在点击开始并允许系统权限后采集；真人麦克风质量仍需实际验收。
 
 模型没有重复装入应用：文字翻译使用本机 Ollama 中的 HY-MT2，语音读取项目 models 文件夹。
+新任务默认采用已安装的 HY-MT2 7B 和经过有限评审的保真配置v2；可手动选择1.8B以缩短等待。旧文字/文档与字幕任务继续沿用保存配置和成功译文，打开不自动推理；明确从头重译才另建任务采用当前配置。
+本轮自编30条材料的助手语义审阅发现部分改善，但严格日期边界和中位数/平均值等仍有严重错误，未经过用户人工复核。请逐项核对条件、数字、日期、频率、统计限定和重复句；不能将正常完成或无数字警告当作准确性保证。
 若服务未运行，打开“本机资源”并点击“启动本地服务”。
 若模型移动了位置，打开“本机资源”重新选择包含 whisper-coreml 的 models 文件夹。
 流式路径另需同一项目目录中准备的 Python 环境、WhisperLiveKit 补丁源码和 MLX large-v3-turbo 权重，详见项目 runtime/README.md。

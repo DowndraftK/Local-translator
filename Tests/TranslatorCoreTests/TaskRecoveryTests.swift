@@ -96,7 +96,7 @@ private func recoveredResult(_ text: String) -> TranslationRecord {
     do { try await store.save(t); Issue.record("direction mismatch") } catch {}
     t = try textTask(); t.configuration.model = "other-model"
     do { try await store.save(t); Issue.record("model mismatch") } catch {}
-    let original = TranslationConfiguration(model: "hy-mt2:1.8b-q8", direction: "en-zh", digest: "digest")
+    let original = TranslationConfiguration(model: "hy-mt2:1.8b-q8", direction: "en-zh", digest: "digest", profileVersion: 1)
     var changed = original; changed.options["temperature"] = 0.2
     #expect(changed.binding != original.binding)
     changed = original; changed.version = 2

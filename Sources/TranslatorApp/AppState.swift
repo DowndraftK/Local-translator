@@ -20,7 +20,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
 
 @MainActor final class AppState: ObservableObject {
     @Published var page: WorkspacePage = .text
-    @Published var model = "hy-mt2:1.8b-q8" { didSet { if oldValue != model { invalidateTextResult(); invalidateDocumentResult() } } }
+    @Published var model = TranslationConfiguration.defaultModel { didSet { if oldValue != model { invalidateTextResult(); invalidateDocumentResult() } } }
     @Published var direction = "en-zh" { didSet { if oldValue != direction { invalidateTextResult(); invalidateDocumentResult(); documentTranslations = [:] } } }
     @Published var source = "" { didSet { if oldValue != source { invalidateTextResult() } } }
     let recoveryStore: TaskRecoveryStore
@@ -29,7 +29,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     @Published var savingStatus = "暂无未保存内容"
     @Published var recoveryErrors: [String] = []
     var textRecoveryID = UUID()
-    var textConfiguration = TranslationConfiguration(model: "hy-mt2:1.8b-q8", direction: "en-zh")
+    var textConfiguration = TranslationConfiguration(model: TranslationConfiguration.defaultModel, direction: "en-zh")
     var documentConfiguration: TranslationConfiguration?
     var recoveryMetadata: [UUID: RecoveryTask] = [:]
     var recoveryRevision: [UUID: UInt64] = [:]
@@ -231,7 +231,13 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     func translateText() {
         guard !busy else { return }
         preserveCurrentRecovery()
-        if textTask.job != nil { textRecoveryID = UUID() }
+        if textTask.job != nil {
+            textRecoveryID = UUID()
+            // Clear the old job before awaiting model metadata; a pending
+            // autosave must not capture old results under the new recipe.
+            textTask.clear()
+            textConfiguration = TranslationConfiguration(model: model, direction: direction)
+        }
         let input = source, selectedModel = model, selectedDirection = direction
         activity = "正在绑定本机翻译配置…"; error = nil
         operation = Task {
@@ -321,12 +327,16 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
                 let engine = try OllamaEngine()
                 let models = try await engine.models()
                 try Task.checkCancellation()
-                var config = documentConfiguration ?? TranslationConfiguration(model: snapshot.model, direction: snapshot.direction)
+                var config = documentTask.translator.job == nil
+                    ? documentConfiguration ?? TranslationConfiguration(model: snapshot.model, direction: snapshot.direction)
+                    : TranslationConfiguration(model: snapshot.model, direction: snapshot.direction)
                 try config.validate()
                 if config.modelDigest == nil { config.modelDigest = models.first { $0.name == snapshot.model }?.digest }
-                documentConfiguration = config
-                let translate = recoveryTranslator(engine, configuration: documentConfiguration!)
+                // beforeFork captures the old successful results with their old
+                // recipe. Publish the new recipe only after the new UUID exists.
                 documentTask.forkTranslation()
+                documentConfiguration = config
+                let translate = recoveryTranslator(engine, configuration: config)
                 documentTask.start(translate: translate)
             } catch { self.error = error.localizedDescription }
         }

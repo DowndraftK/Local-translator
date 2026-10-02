@@ -27,6 +27,7 @@ struct StreamingQualityIssue: Decodable {
 }
 
 struct StreamingSnapshot: Decodable {
+    let translation_model: String?
     let session_id: String?
     let state: String?
     let audio_path: String?

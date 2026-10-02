@@ -154,6 +154,10 @@ struct StreamingAudioWorkspace: View {
 
             HStack {
                 Text(controller.countDescription).font(.system(size: 11)).foregroundStyle(.secondary)
+                if let model = controller.snapshot?.translation_model {
+                    Text("本任务翻译模型：\(model) · 补译沿用任务保存的配置")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 Spacer()
                 if controller.isPlaying { Button("暂停回放") { controller.pausePlayback() } }
                 Picker("倍速", selection: $controller.playbackRate) {

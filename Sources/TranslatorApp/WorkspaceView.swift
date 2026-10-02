@@ -405,7 +405,7 @@ struct ResourceWorkspace: View {
                     Text("本地翻译器 · M0 交互测试版").font(.system(size: 14, weight: .medium))
                     Text("适用于这台 Apple Silicon Mac，macOS 26 或更新版本。\n应用包复用本机 Ollama 和语音模型；移动应用无需复制权重，移动模型后请重新选择资源目录。")
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(5)
-                    ReviewHint(text: "连续识别的录音任务保存在本机 Application Support/LocalTranslator/Recordings，可打开任务继续补译。文字结果仅保留于当前窗口，请主动复制或导出；文档与原生引擎对照使用临时目录。")
+                    ReviewHint(text: "文字、文档和录音任务均保存在本机，可打开后主动继续。请核对期限、否定、统计限定和重复句；完成处理不代表内容正确。旧提取/选段与原生引擎对照仍使用临时目录。")
                     if let folder = state.lastWorkFolder { Button("打开本次测试目录") { NSWorkspace.shared.open(folder) } }
                 }
             }.padding(1)

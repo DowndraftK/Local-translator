@@ -63,6 +63,7 @@ public struct TranslationRecord: Codable {
     public var promptTokens: Int? = nil
     public var promptEvaluationSeconds: Double? = nil
     public var generationSeconds: Double? = nil
+    public var requestConfiguration: TranslationConfiguration? = nil
 }
 
 public enum ContentChecks {
@@ -76,6 +77,9 @@ public enum ContentChecks {
                 .map { ns.substring(with: $0.range).replacingOccurrences(of: ",", with: "") }.sorted()
         }
         var result: [String] = []
+        if ["before", "after", "at least", "at most", "only if", "unless", "may not", "之前", "之后", "至少", "至多", "每天", "每次", "不得"].contains(where: { source.localizedCaseInsensitiveContains($0) }) {
+            result.append("请逐项核对期限、否定、必要条件和频率；模型可能改变边界或义务，数字一致也不保证正确。")
+        }
         if numbers(source) != numbers(target) { result.append("数字形式或数量有变化，请人工核对；这不代表已判定误译。") }
         for term in glossary where source.localizedCaseInsensitiveContains(term.source) && !target.contains(term.target) {
             result.append("偏好术语未出现：\(term.source) → \(term.target)")

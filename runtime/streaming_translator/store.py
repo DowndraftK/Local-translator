@@ -10,6 +10,7 @@ import uuid
 
 from .segmentation import take_segments
 from .timing import validate_token, effective_row
+from .translation_config import binding, validate
 
 
 def file_sha256(path):
@@ -210,10 +211,29 @@ class SessionStore:
             lease = str(uuid.uuid4())
             self.db.execute("UPDATE translations SET state='running',lease=?,started_at=?,attempts=attempts+1,error=NULL WHERE segment_id=?",
                             (lease, time.time(), row['id']))
-            return {**dict(row), 'lease': lease}
+            config = self.get('translation_configuration')
+            return {**dict(row), 'lease': lease, 'configuration_binding': binding(config) if config else None}
+
+    def bind_translation_configuration(self, config):
+        config = validate(config, self.get('translation_model'))
+        with self.transaction():
+            previous = self.get('translation_configuration')
+            if previous is not None:
+                # A new task can fill its initially unknown digest exactly once.
+                comparable = {**previous, 'model_digest': config['model_digest']}
+                if previous != config and (previous.get('model_digest') is not None or comparable != config):
+                    raise ValueError('任务已有另一套翻译配置；请另建任务，不覆盖旧成功译文。')
+            self.set('translation_configuration', config)
+            self.set('translation_model_digest', config['model_digest'])
 
     def finish(self, job, result=None, error=None):
         with self.transaction():
+            config = self.get('translation_configuration')
+            current = binding(config) if config else None
+            if job.get('configuration_binding') != current:
+                return False
+            if result is not None and current is not None and result.get('configuration_binding') != current:
+                return False
             # A corrected source or a retried job cannot accept the previous request's result.
             cursor = self.db.execute('''UPDATE translations SET state=?,chinese=?,error=?,completed_at=?,result_json=?,lease=NULL
                 WHERE segment_id=? AND revision=? AND lease=? AND state='running'

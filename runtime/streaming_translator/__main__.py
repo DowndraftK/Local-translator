@@ -11,6 +11,7 @@ import sys
 import time
 
 from .store import SessionStore, atomic_json, export_subtitles
+from .translation_config import DEFAULT_MODEL, recipe, saved_recipe
 
 
 def arguments():
@@ -24,7 +25,7 @@ def arguments():
         p.add_argument('--session', type=Path, required=True)
         if name == 'record':
             p.add_argument('--config', type=Path, required=True)
-            p.add_argument('--translation-model', default='hy-mt2:1.8b-q8')
+            p.add_argument('--translation-model', default=DEFAULT_MODEL)
             p.add_argument('--no-translation', action='store_true')
         if name == 'status':
             p.add_argument('--limit', type=int)
@@ -43,7 +44,7 @@ def arguments():
             p.add_argument('--dtype', choices=['float32', 'float16'])
             p.add_argument('--coalesce-seconds', type=float)
             p.add_argument('--max-context-tokens', type=int)
-            p.add_argument('--translation-model', default='hy-mt2:1.8b-q8')
+            p.add_argument('--translation-model', default=DEFAULT_MODEL)
             p.add_argument('--no-translation', action='store_true')
             p.add_argument('--no-vad', action='store_true')
             p.add_argument('--endpoint', default='http://127.0.0.1:11434')
@@ -64,9 +65,12 @@ async def translation_loop(store, done, stop):
     if not model:
         await done.wait()
         return
-    translator = LocalTranslator(store.get('endpoint'), model)
-    translator.digest = store.get('translation_model_digest')
+    translator = LocalTranslator(store.get('endpoint'), model, configuration=saved_recipe(store))
     try:
+        # Bind digest and the entire recipe before claiming a request. A future
+        # default change cannot alter pending jobs or old completed rows.
+        await translator.verify()
+        store.bind_translation_configuration(translator.configuration)
         while not stop.is_set():
             job = store.claim()
             if not job:
@@ -112,6 +116,7 @@ async def execute(args, store):
                 raise ValueError('历史文字上下文须在 16–428 个 token 之间。')
             config['max_context_tokens'] = args.max_context_tokens
         store.initialize(translation_model=None if args.no_translation else args.translation_model,
+                         translation_configuration=None if args.no_translation else recipe(args.translation_model),
                          endpoint=args.endpoint, input_kind='microphone' if args.stdin_pcm else 'file',
                          playback_mode='paced' if args.paced else 'batch',
                          requested_audio_limit=args.max_audio_seconds)
@@ -119,6 +124,7 @@ async def execute(args, store):
     elif args.command == 'record':
         config = json.loads(args.config.read_text())
         store.initialize(translation_model=None if args.no_translation else args.translation_model,
+                         translation_configuration=None if args.no_translation else recipe(args.translation_model),
                          input_kind='recording', endpoint='http://127.0.0.1:11434')
         atomic_json(store.directory/'runtime.json', config)
     elif args.command == 'resume':
