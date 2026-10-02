@@ -2527,5 +2527,15 @@
     "recording_sqlite_user_version": 3,
     "legacy_subtitle_recipe": "缺少完整recipe时按历史v1恢复；已有不兼容结果profile明确拒绝",
     "legacy_completed_results_retained": true
+  },
+  "git_delivery": {
+    "branch": "codex/translation-quality",
+    "implementation_commit": "3ea3537",
+    "repository": "https://github.com/DowndraftK/Local-translator.git",
+    "initial_push_exit_code": 0,
+    "initial_push_result": "new branch created, upstream configured",
+    "main_changed": false,
+    "pr_created": false,
+    "remote_sha_checked": false
   }
 }
