@@ -28,6 +28,7 @@ struct WorkspaceView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
+        .sheet(isPresented: $state.showSavedTasks) { SavedTasksSheet().environmentObject(state) }
         .tint(accent)
         .frame(minWidth: 980, minHeight: 690)
     }
@@ -98,6 +99,7 @@ struct WorkspaceView: View {
                     Button { state.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("关闭错误提示")
                 }
             }
+            if state.page == .text || state.page == .documents { Text(state.savingStatus).font(.system(size: 11)).foregroundStyle(state.persistenceFailure == nil ? Color.secondary : Color.orange).textSelection(.enabled) }
             HStack(spacing: 9) {
                 if state.busy { ProgressView().controlSize(.small) }
                 Text(state.activity ?? (state.textTask.busy ? state.textTask.job?.summary : nil) ?? (state.documentTask.busy ? "正在处理文档；可继续阅读，详细进度见文档页" : nil) ?? state.notice).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -158,6 +160,7 @@ struct TextWorkspace: View {
         VStack(spacing: 14) {
             HStack {
                 DirectionPicker()
+                Button("打开已保存任务") { state.openSavedTasks() }.disabled(state.busy)
                 Spacer()
                 Button("粘贴") { state.paste() }.disabled(state.busy)
                 Button("试用示例") { state.source = "Students must submit the application by September 30. Late submissions will not be accepted unless an extension has been approved in advance."; state.direction = "en-zh" }.disabled(state.busy)
@@ -223,9 +226,10 @@ struct TextWorkspace: View {
                 }
             }
             HStack {
-                ReviewHint(text: "结果仅保留于当前窗口，请主动复制或导出。重新开始会完整重译。日期、否定和条件请核对原文。")
+                ReviewHint(text: "输入及结果自动保存；打开后主动继续。失败段最多三次尝试。日期、否定和条件请核对原文。")
                 Spacer()
-                Button("导出双语 TXT") { state.exportTextTranslation() }.disabled(state.textTask.job == nil)
+                Button("继续未完成 / 重试失败") { state.continueTextRecovery() }.disabled(state.busy || !state.textTask.canResume)
+                Button("导出双语 TXT") { state.exportTextTranslation() }.disabled(state.source.isEmpty)
                 Button { state.translateText() } label: {
                     Label(state.textTask.job == nil ? "开始翻译" : "重新开始", systemImage: "arrow.right").padding(.horizontal, 8)
                 }

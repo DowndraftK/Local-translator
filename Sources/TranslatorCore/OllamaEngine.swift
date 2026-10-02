@@ -135,7 +135,7 @@ public final class OllamaEngine {
         return capabilities
     }
     public func translate(_ source: String, model: String, direction: String = "en-zh",
-                          glossary: [GlossaryTerm] = [],
+                          glossary: [GlossaryTerm] = [], configuration: TranslationConfiguration? = nil,
                           onText: ((String) -> Void)? = nil) async throws -> TranslationRecord {
         guard ["en-zh", "zh-en"].contains(direction) else { throw M0Error.invalid("方向应为 en-zh 或 zh-en。") }
         try Task.checkCancellation()
@@ -160,14 +160,28 @@ public final class OllamaEngine {
             messages = [["role": "user", "content": prompt]]
             generation.merge(["temperature": 0.7, "top_p": 0.6, "top_k": 20, "repeat_penalty": 1.05]) { _, new in new }
         }
+        if let configuration {
+            try configuration.validate()
+            guard configuration.model == model, configuration.direction == direction, glossary.isEmpty else {
+                throw M0Error.invalid("请求与保存配置不匹配；不能复用旧结果。")
+            }
+            if let digest = configuration.modelDigest {
+                guard try await models().first(where: { $0.name == model })?.digest == digest else {
+                    throw M0Error.unavailable("已安装模型与任务保存的 digest 不同或模型缺失；请恢复原模型，或新建任务。")
+                }
+            }
+            messages = [["role": "user", "content": configuration.userPrefix + source]]
+            if let system = configuration.systemPrompt { messages.insert(["role": "system", "content": system], at: 0) }
+            generation = configuration.options.mapValues { $0 as Any }
+        }
         let promptBytes = messages.reduce(0) { $0 + ($1["content"]?.utf8.count ?? 0) } - source.utf8.count
         try TranslationBudget.validate(source: source, promptBytes: promptBytes)
         let capabilities = try await verifyLocalModel(model)
         try Task.checkCancellation()
-        var body: [String: Any] = ["model": model, "stream": true, "keep_alive": "5m",
+        var body: [String: Any] = ["model": model, "stream": true, "keep_alive": configuration?.keepAlive ?? "5m",
                                    "messages": messages, "options": generation]
         // Non-thinking models may reject the think parameter rather than ignoring it.
-        if capabilities.contains("thinking") { body["think"] = false }
+        if capabilities.contains("thinking"), configuration?.disableThinking != false { body["think"] = false }
         let r = try request("api/chat", body: body)
         let start = Date()
         let (bytes, response) = try await session.bytes(for: r); try check(response)
@@ -190,7 +204,8 @@ public final class OllamaEngine {
                                  direction: direction, elapsedSeconds: Date().timeIntervalSince(start),
                                  firstTextSeconds: firstText, outputTokens: accumulator.outputTokens,
                                  warnings: ContentChecks.warnings(source: source, target: accumulator.text, glossary: glossary))
-        result.promptProfile = isHYMT2 ? "hy-mt2-faithful-v1" : "generic-faithful-v1"
+        result.configurationBinding = configuration?.binding
+        result.promptProfile = configuration?.promptProfile ?? (isHYMT2 ? "hy-mt2-faithful-v1" : "generic-faithful-v1")
         result.modelLoadSeconds = accumulator.finalChunk?.load_duration.map { $0 / 1_000_000_000 }
         result.promptTokens = accumulator.finalChunk?.prompt_eval_count
         result.promptEvaluationSeconds = accumulator.finalChunk?.prompt_eval_duration.map { $0 / 1_000_000_000 }

@@ -10,6 +10,18 @@ fi
 output_root="$project_root/dist/M0-$(date +%Y%m%d-%H%M%S)-$configuration"
 app_bundle="$output_root/本地翻译器.app"
 mkdir -p "$output_root"
+python3 - "$output_root" "$project_root" <<'PYBUILD'
+import plistlib,sys
+from pathlib import Path
+output,project=map(Path,sys.argv[1:]);existing=[21]
+for path in (project/'dist').glob('*/build-number.txt'):
+    try: existing.append(int(path.read_text()))
+    except (OSError,ValueError): pass
+for path in (project/'dist').glob('*/本地翻译器.app/Contents/Info.plist'):
+    try: existing.append(int(plistlib.loads(path.read_bytes())['CFBundleVersion']))
+    except (OSError,ValueError,KeyError,plistlib.InvalidFileException): pass
+(output/'build-number.txt').write_text(str(max(existing)+1)+'\n')
+PYBUILD
 bash scripts/swift.sh build -c "$configuration" > "$output_root/build.log" 2>&1
 build_root="$(bash scripts/swift.sh build -c "$configuration" --show-bin-path)"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources"
@@ -34,10 +46,11 @@ python3 - "$app_bundle" "$project_root" <<'PY'
 import plistlib,sys,re
 from pathlib import Path
 app=Path(sys.argv[1]); project=Path(sys.argv[2])
+build_number=int((app.parent/'build-number.txt').read_text())
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.6', 'CFBundleVersion':'21',
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.7', 'CFBundleVersion':str(build_number),
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -59,12 +72,12 @@ codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
 cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.6 语音内容与时间可靠性测试版
+本地翻译器 — 0.2.7 文字文档保存恢复测试版
 
 双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
 应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
 文字页面支持超过 8,000 字符的文章自动分段、逐段对照、完整进度、停止、复制已有译文和双语 TXT 导出。
-文字结果仅保留于当前窗口，退出后不恢复；请主动复制或导出。停止后重新开始会从头翻译，不提供续跑或单段重试。
+文字输入、完整段计划、配置与译文自动保存。点击“打开已保存任务”只读取，主动“继续未完成 / 重试失败”保留成功段，失败段每轮最多三次尝试。输入、模型或方向变化会新建任务；“重新开始”完整重译。
 录音页面提供主动麦克风输入、英文先显示、独立中文队列、保存任务、补译/失败重试、按片段回放、英文纠错和 TXT/SRT/VTT 导出。
 “录后重新校对”根据完整保存的录音生成独立新版本并翻译，保留原字幕以便比较。长录音的流式结果可能漏词，建议录后校对再复核。
 麦克风仅在点击开始并允许系统权限后采集；真人麦克风质量仍需实际验收。
@@ -75,13 +88,15 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 流式路径另需同一项目目录中准备的 Python 环境、WhisperLiveKit 补丁源码和 MLX large-v3-turbo 权重，详见项目 runtime/README.md。
 本包可在这台 Mac 上移动使用；换到其他机器仍需另行准备 Ollama 和模型。
 
+文字/文档保存目录为 ~/Library/Application Support/LocalTranslator/TextDocuments，每任务保留 current.json、上一份有效 previous.json 及源副本。输入和编辑草稿防抖350ms，处理在每页/段持久化成功后继续；异常退出只保证已落盘内容，当前半段和未保存缓冲不保证。保存失败会停止调度并提示，正常退出等待保存；失败可返回导出或明确退出。损坏/未来格式不会静默覆盖。
+
 这是使用本机临时签名生成的自用测试包，未经过 Developer ID 公证或公开分发验收。
 语音保留原始时间依据，异常时间会提示核对；回放与 TXT/SRT/VTT 使用同一有效时间，导出不再累计顺延交叠。
 本版修正回退撤销识别进度、快速输入窗口跳过和终结尾词，并改善字幕起点。模型仍会错词、漏识别音乐歌词或产生异常重复，需要核对实际声音。请核对原文与录音，勿把“处理完成”等同于质量验收。
 新的录音任务保存在 ~/Library/Application Support/LocalTranslator/Recordings。可暂停/继续录音；设备变化或休眠会暂停，请手动继续。
 “仅录音，稍后识别”可先保存音频；中断任务可点击“继续识别”，从最近已保存的安全位置重做尾部。若没有检查点，会从头识别；旧尾部保存在数据库恢复记录中。
 超过 200 段的字幕可分页浏览，导出始终包含全部段落。
-文档页面支持文字型 PDF 全部页或连续范围（每轮最多 200 页）及 UTF-8 TXT 的整篇翻译、按页阅读、原 PDF 定位和完整双语 TXT 导出。默认文字层，不隐式 OCR；可主动选择整页 OCR，逐页核对、保存校正后再翻译。原始 OCR、有效原文修订及问题页均保留于完整导出。复杂排版仍需人工核对。文档结果仅保留于当前窗口，退出不恢复。旧提取/选段与原生引擎对照保留临时测试目录。
+文档页面支持文字型 PDF 全部页或连续范围（每轮最多 200 页）及 UTF-8 TXT 的整篇翻译、按页阅读、原 PDF 定位和完整双语 TXT 导出。默认文字层，不隐式 OCR；可主动选择整页 OCR，逐页核对、保存校正后再翻译。原始 OCR、有效原文修订及问题页均保留于完整导出。复杂排版仍需人工核对。文档原始提取/OCR、有效修订、编辑草稿、段计划及译文自动保存。源 PDF/TXT 保留指纹匹配的副本，原文件不改写；原路径移动不会混用新文件。重开后主动继续，原页可回查。旧提取/选段与原生引擎对照保留临时测试目录。
 TXT
 ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$output_root/本地翻译器-M0.zip"
 printf '应用：%s\n压缩包：%s/本地翻译器-M0.zip\n' "$app_bundle" "$output_root"

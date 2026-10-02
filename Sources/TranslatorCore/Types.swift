@@ -57,6 +57,7 @@ public struct TranslationRecord: Codable {
     public var firstTextSeconds: Double?
     public var outputTokens: Int?
     public var warnings: [String]
+    public var configurationBinding: String? = nil
     public var promptProfile: String? = nil
     public var modelLoadSeconds: Double? = nil
     public var promptTokens: Int? = nil

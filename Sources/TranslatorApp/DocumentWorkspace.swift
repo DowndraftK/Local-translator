@@ -17,10 +17,12 @@ struct DocumentWorkspace: View {
             }
             if state.wholeDocument { wholeBody } else { LegacyDocumentWorkspace() }
         }
-        .onChange(of: state.documentTask.snapshot?.id) { _, _ in
+        .onChange(of: state.documentTask.snapshot?.id, initial: true) { _, _ in
             selectedPage = state.documentTask.snapshot?.range.first
         }
         .onChange(of: state.wholeDocument) { _, whole in
+            guard !state.restoringRecovery else { return }
+            state.preserveCurrentRecovery()
             if whole, let url = state.documentURL { state.documentTask.load(url) }
             else { state.documentTask.clear() }
         }
@@ -29,7 +31,8 @@ struct DocumentWorkspace: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Button("选择文件") { state.chooseDocument() }.disabled(state.busy || state.documentTask.hasDrafts)
-                Text(state.documentURL?.lastPathComponent ?? "PDF 或 UTF-8 TXT").lineLimit(1)
+                Button("打开已保存任务") { state.openSavedTasks() }.disabled(state.busy)
+                Text(state.documentTask.snapshot?.file ?? state.documentURL?.lastPathComponent ?? "PDF 或 UTF-8 TXT").lineLimit(1)
                 Spacer()
                 DirectionPicker().disabled(state.documentTask.hasDrafts)
             }
@@ -52,6 +55,7 @@ struct DocumentWorkspace: View {
                 Button(state.documentMode == .ocr && state.documentTask.isPDF ? "识别所选范围" : "提取预览") { state.extractWholeDocument() }.disabled(state.busy || state.documentTask.hasDrafts || state.documentTask.data == nil)
                 Spacer()
                 if state.busy { Button("停止") { state.cancel() } }
+                Button("继续未完成 / 重试失败") { state.continueDocumentRecovery() }.disabled(state.busy || !(state.documentTask.canContinueExtraction || state.documentTask.translator.canResume))
                 Button(state.documentTask.translator.job == nil ? "翻译所选范围" : "从头重新翻译") { state.translateWholeDocument() }
                     .disabled(!state.documentTask.canStart)
                     .buttonStyle(.borderedProminent)
@@ -59,7 +63,7 @@ struct DocumentWorkspace: View {
             Text("每轮最多 200 页；范围从 1 开始使用 PDF 物理页码。修改范围后点击提取预览；重新提取会替换当前结果。")
                 .font(.caption).foregroundStyle(.secondary)
             if state.documentTask.hasDrafts {
-                Text("第 \(state.documentTask.drafts.keys.sorted().map(String.init).joined(separator: "、")) 页有未保存编辑；切页保留草稿。请保存校正或取消编辑后再翻译、换文件或切换设置。")
+                Text("第 \(state.documentTask.drafts.keys.sorted().map(String.init).joined(separator: "、")) 页有尚未应用编辑；草稿自动保存，切页保留。请保存校正或取消编辑后再翻译、换文件或切换设置。")
                     .font(.caption).foregroundStyle(.orange)
             }
             if let error = state.documentTask.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
@@ -139,7 +143,7 @@ struct DocumentWorkspace: View {
                     Button("复制已有译文") { state.exportDocumentTranslation(copyOnly: true) }
                         .disabled((state.documentTask.translator.job?.count(.completed) ?? 0) == 0)
                     Button("导出双语 TXT") { state.exportDocumentTranslation() }
-                    Text(state.documentTask.hasDrafts ? "导出仅包含已保存版本，不含编辑草稿。" : "结果仅保留于当前窗口；退出不恢复。").font(.caption).foregroundStyle(.secondary)
+                    Text(state.documentTask.hasDrafts ? "导出仅包含已保存版本，不含编辑草稿。" : "原文、有效修订及译文自动保存；重开后可主动继续。").font(.caption).foregroundStyle(.secondary)
                 }
             } else {
                 Spacer()
@@ -153,10 +157,10 @@ struct DocumentWorkspace: View {
         HStack {
             if state.documentTask.snapshot?.translationStarted == true {
                 Button("重新核对并开始新一轮") { confirmReview = true }.disabled(state.busy)
-                    .alert("清除当前译文并重新核对？", isPresented: $confirmReview) {
-                        Button("清除译文，重新核对", role: .destructive) { state.documentTask.reopenReview() }
+                    .alert("另存旧任务并重新核对？", isPresented: $confirmReview) {
+                        Button("另存并重新核对", role: .destructive) { state.documentTask.reopenReview() }
                         Button("取消", role: .cancel) {}
-                    } message: { Text("保留原始 OCR 和当前校正文；下一次翻译从头开始，旧译文不会对应新原文。") }
+                    } message: { Text("旧任务可重新打开；保留原始 OCR 和当前校正文，下一次翻译对应新任务与修订。") }
             } else if state.documentTask.drafts[page.id] != nil {
                 Button("保存校正") { state.documentTask.saveEdit(page: page.id) }.disabled(state.busy)
                 Button("取消编辑") { state.documentTask.cancelEdit(page: page.id) }.disabled(state.busy)

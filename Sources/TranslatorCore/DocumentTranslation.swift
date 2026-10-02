@@ -56,9 +56,12 @@ public struct DocumentSource: Codable {
     public let revision: UUID
 }
 public struct DocumentSnapshot: Identifiable, Codable {
-    public let id: UUID
+    public var id: UUID
     public let file: String
     public let fingerprint: String
+    public var originalPath: String? = nil
+    public var extractionProfile: String? = "pdfkit-vision-v1"
+    public var savedOCRSettings: String? = DocumentOCR.settings
     public let totalPages: Int
     public let isPDF: Bool
     public let range: DocumentPageRange
@@ -81,8 +84,8 @@ public struct DocumentSnapshot: Identifiable, Codable {
     public func export(translation candidate: TextTranslationJob?) -> String {
         let translation = candidate?.source == sourceKey ? candidate : nil
         var out = "文档双语对照\n文件：\(file)\n文件 SHA-256：\(fingerprint)\n总页数：\(isPDF ? String(totalPages) : "不适用（TXT）")\n选定范围：\(isPDF ? range.label : "全文")\n模型：\(model)\n方向：\(direction)\n提取方式：\(isPDF ? mode.label : "UTF-8")\n任务：\(phase)\n\(coverage)\n"
-        out += "\(translation?.summary.replacingOccurrences(of: "全部翻译完成", with: completionLabel) ?? "尚未翻译")\n\(modeLimitations)\n范围外页面未选入本次任务。结果仅保留于当前窗口；退出不恢复。\n"
-        if mode == .ocr { out += DocumentOCR.settings + "\n" }
+        out += "\(translation?.summary.replacingOccurrences(of: "全部翻译完成", with: completionLabel) ?? "尚未翻译")\n\(modeLimitations)\n范围外页面未选入本次任务。自动保存状态请查看应用；本文件是导出时已确认的有效修订。\n"
+        if mode == .ocr { out += (savedOCRSettings ?? DocumentOCR.settings) + "\n" }
         if let issue { out += "提示：\(issue)\n" }
         if let error = translation?.error { out += "翻译提示：\(error)\n" }
         for page in pages {
@@ -200,14 +203,17 @@ public actor DocumentTextReader {
 @MainActor public final class DocumentTranslationController: ObservableObject {
     public typealias OCR = (Int, OCRCancellation) async throws -> DocumentPageRecord
     public typealias Prepare = (DocumentSnapshot) async throws -> DocumentSnapshot
-    @Published public private(set) var snapshot: DocumentSnapshot?
+    public var changed: (() -> Void)?
+    public var checkpoint: (() async throws -> Void)?
+    public var beforeFork: (() -> Void)?
+    @Published public private(set) var snapshot: DocumentSnapshot? { didSet { changed?() } }
     @Published public private(set) var data: Data?
     @Published public private(set) var totalPages = 0
     @Published public private(set) var isPDF = true
     @Published public private(set) var extracting = false
     @Published public private(set) var preparing = false
     @Published public private(set) var error: String?
-    @Published public private(set) var drafts: [Int: String] = [:]
+    @Published public private(set) var drafts: [Int: String] = [:] { didSet { changed?() } }
     public let translator = TextTranslationController()
     private var observation: AnyCancellable?
     private var operation: Task<Void, Never>?
@@ -232,7 +238,7 @@ public actor DocumentTextReader {
     public var hasDrafts: Bool { !drafts.isEmpty }
     public var canEdit: Bool { !busy && snapshot?.mode == .ocr && snapshot?.translationStarted == false }
     public var canStart: Bool {
-        !busy && !hasDrafts && snapshot?.segments.isEmpty == false &&
+        !busy && !hasDrafts && data != nil && snapshot?.segments.isEmpty == false &&
         snapshot?.pages.allSatisfy { $0.state != .pending && $0.state != .recognizing && $0.state != .stopped } == true
     }
     public func clear() {
@@ -266,32 +272,70 @@ public actor DocumentTextReader {
             snapshot = DocumentSnapshot(id: id, file: url.lastPathComponent, fingerprint: fingerprint,
                 totalPages: totalPages, isPDF: isPDF, range: range, model: model, direction: direction,
                 pages: (first...last).map { var page = DocumentPageRecord(id: $0); page.mode = effectiveMode; return page }, mode: effectiveMode)
-            operation = Task {
-                let warning = await reader.sourceWarning(url, fingerprint: fingerprint)
-                guard generation == id, !Task.isCancelled else { return }
-                snapshot?.issue = warning
-                for number in first...last {
-                    guard generation == id, !Task.isCancelled else { return }
-                    snapshot?.pages[number - first].state = .recognizing
-                    do {
-                        let page: DocumentPageRecord
-                        if effectiveMode == .ocr {
-                            if let injectedOCR { page = try await injectedOCR(number, token) }
-                            else { page = try await reader.ocrPage(number, cancellation: token, direction: direction) }
-                        } else { page = try await reader.page(number) }
-                        guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
-                        snapshot?.pages[number - first] = page
-                    } catch {
-                        guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
-                        snapshot?.pages[number - first].state = .failed
-                        snapshot?.pages[number - first].issue = error.localizedDescription
-                    }
-                }
-                guard generation == id, !Task.isCancelled else { return }
-                extracting = false; cancellation = nil
-                await rebuild(id: id)
-            }
+            snapshot?.originalPath = url.path
+            operation = Task { await processPages(id: id, reader: reader, url: url, token: token) }
         } catch { self.error = error.localizedDescription }
+    }
+    public var canContinueExtraction: Bool {
+        !busy && !hasDrafts && data != nil && snapshot != nil && translator.job == nil &&
+        (snapshot?.segments.isEmpty == true || snapshot?.pages.contains { [.pending, .stopped, .failed, .recognizing].contains($0.state) } == true)
+    }
+    public func restore(snapshot saved: DocumentSnapshot, translation: TextTranslationJob?, drafts: [Int: String], assetURL: URL?) async {
+        clear(); generation = UUID(); snapshot = saved; self.drafts = drafts
+        translator.restore(translation)
+        totalPages = saved.totalPages; isPDF = saved.isPDF; fingerprint = saved.fingerprint
+        for i in saved.pages.indices where [.pending, .recognizing].contains(saved.pages[i].state) { snapshot?.pages[i].state = .stopped }
+        snapshot?.phase = "已打开保存任务；请主动继续未完成部分"
+        if let assetURL {
+            do {
+                let loaded = try await reader.load(assetURL)
+                guard loaded.3 == saved.fingerprint else { throw M0Error.invalid("源副本指纹不匹配。") }
+                data = loaded.0; url = assetURL
+            } catch { self.error = error.localizedDescription }
+        } else { error = "源副本无法确认；原文与译文保留并可导出，暂不能继续处理或回查原页。" }
+    }
+    public func continueExtraction() {
+        guard canContinueExtraction, let url else { return }
+        guard snapshot?.extractionProfile == nil || snapshot?.extractionProfile == "pdfkit-vision-v1" else {
+            error = "此任务的提取/OCR配置版本不兼容；保留数据并可导出，请新建任务。"; return
+        }
+        generation = UUID(); let id = generation, token = OCRCancellation(); cancellation = token
+        extracting = true; error = nil
+        operation = Task { await processPages(id: id, reader: reader, url: url, token: token) }
+    }
+    private func processPages(id: UUID, reader: DocumentTextReader, url: URL, token: OCRCancellation) async {
+        guard let captured = snapshot else { return }
+        do {
+            snapshot?.issue = await reader.sourceWarning(url, fingerprint: captured.fingerprint)
+            try await checkpoint?()
+            guard generation == id, !Task.isCancelled else { return }
+            for i in captured.pages.indices where ![.extracted, .noText].contains(captured.pages[i].state) {
+                guard generation == id, !Task.isCancelled else { return }
+                snapshot?.pages[i].state = .recognizing
+                try await checkpoint?()
+                guard generation == id, !Task.isCancelled else { return }
+                do {
+                    let page: DocumentPageRecord
+                    let number = captured.pages[i].id
+                    if captured.mode == .ocr {
+                        if let injectedOCR { page = try await injectedOCR(number, token) }
+                        else { page = try await reader.ocrPage(number, cancellation: token, direction: captured.direction) }
+                    } else { page = try await reader.page(number) }
+                    guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
+                    snapshot?.pages[i] = page
+                } catch {
+                    guard generation == id, !Task.isCancelled, !token.isCancelled else { return }
+                    snapshot?.pages[i].state = .failed; snapshot?.pages[i].issue = error.localizedDescription
+                }
+                try await checkpoint?()
+                guard generation == id, !Task.isCancelled else { return }
+            }
+            extracting = false; cancellation = nil
+            await rebuild(id: id)
+        } catch {
+            guard generation == id, !Task.isCancelled else { return }
+            stop(); self.error = "保存失败，已停止文档处理；内存原文可导出：" + error.localizedDescription
+        }
     }
     private func rebuild(id: UUID) async {
         guard let captured = snapshot, generation == id else { return }
@@ -300,7 +344,10 @@ public actor DocumentTextReader {
             var ready = try await prepare(captured)
             guard generation == id, !Task.isCancelled else { return }
             ready.phase = ready.segments.isEmpty ? "没有可翻译的有效原文" : "提取/校正计划已就绪，等待翻译"
-            snapshot = ready; preparing = false; operation = nil
+            snapshot = ready
+            try await checkpoint?()
+            guard generation == id, !Task.isCancelled else { return }
+            preparing = false; operation = nil
         } catch {
             guard generation == id, !Task.isCancelled else { return }
             snapshot?.segments = []; snapshot?.sources = []
@@ -333,8 +380,13 @@ public actor DocumentTextReader {
     /// UI confirms that translations will be cleared before invoking this action.
     public func reopenReview() {
         guard !busy, !hasDrafts, snapshot?.mode == .ocr else { return }
-        generation = UUID(); translator.clear(); snapshot?.translationStarted = false
-        snapshot?.phase = "重新核对；原始 OCR 与当前校正文保留，下一轮从头翻译"
+        beforeFork?()
+        generation = UUID(); translator.clear(); snapshot?.id = UUID(); snapshot?.translationStarted = false
+        snapshot?.phase = "重新核对；旧任务另存，原始 OCR 与当前校正文保留，下一轮从头翻译"
+    }
+    public func forkTranslation() {
+        guard !busy, translator.job != nil else { return }
+        beforeFork?(); generation = UUID(); translator.clear(); snapshot?.id = UUID()
     }
     public func start(translate: @escaping TextTranslationController.Translate) {
         guard canStart, let snapshot else { return }
@@ -362,7 +414,7 @@ public actor DocumentTextReader {
         operation?.cancel(); operation = nil
         if extracting || preparing {
             generation = UUID(); extracting = false; preparing = false
-            snapshot?.phase = "提取/分段已停止；已获结果保留。当前页已请求取消，可能仍在等待底层返回；不会接受迟到结果。重新提取后翻译。"
+            snapshot?.phase = "提取/分段已停止；已获结果保留。当前页已请求取消，可能仍在等待底层返回；不会接受迟到结果。可主动继续未完成页。"
             snapshot?.segments = []; snapshot?.sources = []
             if let pages = snapshot?.pages {
                 for i in pages.indices where pages[i].state == .pending || pages[i].state == .recognizing { snapshot?.pages[i].state = .stopped }

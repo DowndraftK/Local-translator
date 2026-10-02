@@ -23,6 +23,20 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     @Published var model = "hy-mt2:1.8b-q8" { didSet { if oldValue != model { invalidateTextResult(); invalidateDocumentResult() } } }
     @Published var direction = "en-zh" { didSet { if oldValue != direction { invalidateTextResult(); invalidateDocumentResult(); documentTranslations = [:] } } }
     @Published var source = "" { didSet { if oldValue != source { invalidateTextResult() } } }
+    let recoveryStore: TaskRecoveryStore
+    @Published var savedTasks: [RecoveryTask] = []
+    @Published var showSavedTasks = false
+    @Published var savingStatus = "暂无未保存内容"
+    @Published var recoveryErrors: [String] = []
+    var textRecoveryID = UUID()
+    var textConfiguration = TranslationConfiguration(model: "hy-mt2:1.8b-q8", direction: "en-zh")
+    var documentConfiguration: TranslationConfiguration?
+    var recoveryMetadata: [UUID: RecoveryTask] = [:]
+    var recoveryRevision: [UUID: UInt64] = [:]
+    var restoringRecovery = false
+    var autosave: Task<Void, Never>?
+    var dirtyGeneration: UInt64 = 0
+    var persistenceFailure: String?
     let textTask = TextTranslationController()
     let documentTask = DocumentTranslationController()
     private var documentObservation: AnyCancellable?
@@ -57,10 +71,27 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     private var serverLog: FileHandle?
 
     init() {
+        let arguments = CommandLine.arguments
+        let root: URL
+        if let index = arguments.firstIndex(of: "--recovery-root"), index + 1 < arguments.count {
+            root = URL(fileURLWithPath: arguments[index + 1], isDirectory: true)
+        } else {
+            root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("LocalTranslator/TextDocuments", isDirectory: true)
+        }
+        recoveryStore = TaskRecoveryStore(root: root)
         resourceRoot = UserDefaults.standard.string(forKey: "speechResourceRoot")
             ?? Bundle.main.object(forInfoDictionaryKey: "M0ResourceRoot") as? String ?? ""
         documentObservation = documentTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         textObservation = textTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        textTask.changed = { [weak self] in self?.scheduleRecoverySave() }
+        documentTask.changed = { [weak self] in self?.scheduleRecoverySave() }
+        documentTask.translator.changed = { [weak self] in self?.scheduleRecoverySave() }
+        textTask.checkpoint = { [weak self] job in try await self?.saveTextCheckpoint(job) }
+        documentTask.checkpoint = { [weak self] in try await self?.saveDocumentCheckpoint() }
+        documentTask.translator.checkpoint = { [weak self] job in try await self?.saveDocumentCheckpoint(job: job) }
+        documentTask.beforeFork = { [weak self] in self?.preserveCurrentRecovery() }
+        Task { await refreshSavedTasks() }
         if let index = CommandLine.arguments.firstIndex(of: "--open-recording-session"), index + 1 < CommandLine.arguments.count {
             page = .audio
             streaming.loadSession(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
@@ -68,9 +99,19 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     }
     var busy: Bool { activity != nil || textTask.busy || documentTask.busy }
     private func invalidateDocumentResult() {
-        if !documentTask.busy, !documentTask.hasDrafts, let url = documentURL, wholeDocument { documentTask.load(url) }
+        guard !restoringRecovery else { return }
+        if !documentTask.busy, !documentTask.hasDrafts, let url = documentURL, wholeDocument {
+            preserveCurrentRecovery(); documentTask.load(url); documentConfiguration = nil
+        }
     }
-    private func invalidateTextResult() { if !textTask.busy { textTask.clear() } }
+    private func invalidateTextResult() {
+        guard !restoringRecovery, !textTask.busy else { return }
+        if textTask.job != nil {
+            preserveCurrentRecovery(); textTask.clear(); textRecoveryID = UUID()
+        }
+        textConfiguration = TranslationConfiguration(model: model, direction: direction)
+        scheduleRecoverySave()
+    }
     var chosenBlock: TextBlock? { document?.blocks.first { $0.id == selectedBlock } }
     var selectedTranslation: TranslationRecord? { selectedBlock.flatMap { documentTranslations[$0] } }
     func sourceLabel(for block: TextBlock) -> String {
@@ -148,6 +189,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         }
     }
 
+    func operationForExit() { operation?.cancel() }
     func shutdown() {
         streaming.stop()
         streaming.pausePlayback()
@@ -161,6 +203,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         if documentTask.busy { documentTask.stop(); notice = "文档已停止；已有原文和完成译文可导出" }
         else if textTask.busy { textTask.stop(); notice = "已停止；已完成段可复制，全部原文可导出" }
         else { operation?.cancel(); notice = "正在停止，已完成结果仍可导出" }
+        preserveCurrentRecovery()
     }
 
     private func makeWorkFolder() throws -> URL {
@@ -187,15 +230,25 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
 
     func translateText() {
         guard !busy else { return }
-        error = nil; notice = "文字结果仅保留于当前窗口，请主动复制或导出"
-        do {
-            let engine = try OllamaEngine()
-            textTask.start(source: source, model: model, direction: direction) { input, model, direction in
-                try await withTaskCancellationHandler {
-                    try await engine.translate(input, model: model, direction: direction)
-                } onCancel: { engine.cancelRequests() }
-            }
-        } catch { self.error = error.localizedDescription }
+        preserveCurrentRecovery()
+        if textTask.job != nil { textRecoveryID = UUID() }
+        let input = source, selectedModel = model, selectedDirection = direction
+        activity = "正在绑定本机翻译配置…"; error = nil
+        operation = Task {
+            defer { activity = nil; operation = nil }
+            do {
+                let engine = try OllamaEngine()
+                let models = try await engine.models()
+                try Task.checkCancellation()
+                var config = textConfiguration
+                try config.validate()
+                if config.modelDigest == nil { config.modelDigest = models.first { $0.name == selectedModel }?.digest }
+                textConfiguration = config
+                textTask.start(source: input, model: selectedModel, direction: selectedDirection,
+                    translate: recoveryTranslator(engine, configuration: textConfiguration), taskID: textRecoveryID)
+                notice = "自动保存已启用；停止或重开后可主动继续"
+            } catch { self.error = error.localizedDescription }
+        }
     }
     func copyTextTranslation() {
         guard let snapshot = textTask.job else { return }
@@ -206,9 +259,12 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         }
     }
     func exportTextTranslation() {
-        guard let snapshot = textTask.job else { return }
+        guard !source.isEmpty else { return }
+        var snapshot = textTask.job ?? TextTranslationJob(id: textRecoveryID, source: source, model: model, direction: direction)
+        if snapshot.segments.isEmpty { snapshot.phase = .stopped }
+        let config = textConfiguration, saveStatus = savingStatus
         Task {
-            let text = await Task.detached { snapshot.bilingualText }.value
+            let text = await Task.detached { "保存状态：\(saveStatus)\n配置版本：\(config.version) · 绑定：\(config.binding)\n模型 digest：\(config.modelDigest ?? "未知（草稿尚未请求模型）")\n" + snapshot.bilingualText }.value
             saveText(text, name: "文字双语对照.txt")
         }
     }
@@ -227,7 +283,8 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         panel.title = "选择文档或图片"; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "heic", "tif", "tiff"].compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        documentTask.clear(); document = nil; selectedBlock = nil; documentTranslations = [:]
+        preserveCurrentRecovery()
+        documentTask.clear(); documentConfiguration = nil; document = nil; selectedBlock = nil; documentTranslations = [:]
         documentURL = url
         wholeDocument = ["pdf", "txt"].contains(url.pathExtension.lowercased())
         allDocumentPages = true; rangeFirst = "1"; rangeLast = "1"
@@ -250,25 +307,37 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         guard !busy else { return }
         let first = allDocumentPages || !documentTask.isPDF ? 1 : Int(rangeFirst) ?? 0
         let last = allDocumentPages || !documentTask.isPDF ? documentTask.totalPages : Int(rangeLast) ?? 0
+        preserveCurrentRecovery()
+        documentConfiguration = TranslationConfiguration(model: model, direction: direction)
         documentTask.extract(first: first, last: last, model: model, direction: direction, mode: documentMode)
     }
     func translateWholeDocument() {
-        guard !busy else { return }
-        do {
-            let engine = try OllamaEngine()
-            documentTask.start { input, model, direction in
-                try await withTaskCancellationHandler {
-                    try await engine.translate(input, model: model, direction: direction)
-                } onCancel: { engine.cancelRequests() }
-            }
-        } catch { self.error = error.localizedDescription }
+        guard !busy, let snapshot = documentTask.snapshot else { return }
+        preserveCurrentRecovery()
+        activity = "正在绑定本机翻译配置…"; error = nil
+        operation = Task {
+            defer { activity = nil; operation = nil }
+            do {
+                let engine = try OllamaEngine()
+                let models = try await engine.models()
+                try Task.checkCancellation()
+                var config = documentConfiguration ?? TranslationConfiguration(model: snapshot.model, direction: snapshot.direction)
+                try config.validate()
+                if config.modelDigest == nil { config.modelDigest = models.first { $0.name == snapshot.model }?.digest }
+                documentConfiguration = config
+                let translate = recoveryTranslator(engine, configuration: documentConfiguration!)
+                documentTask.forkTranslation()
+                documentTask.start(translate: translate)
+            } catch { self.error = error.localizedDescription }
+        }
     }
     func exportDocumentTranslation(copyOnly: Bool = false) {
         guard let snapshot = documentTask.snapshot else { return }
         let translation = documentTask.translator.job
+        let config = documentConfiguration, saveStatus = savingStatus
         Task {
             let text = await Task.detached {
-                copyOnly ? (translation?.source == snapshot.sourceKey ? translation?.completedTranslation ?? "" : "") : snapshot.export(translation: translation)
+                copyOnly ? (translation?.source == snapshot.sourceKey ? translation?.completedTranslation ?? "" : "") : "保存状态：\(saveStatus)\n配置绑定：\(config?.binding ?? "尚未绑定")\n" + snapshot.export(translation: translation)
             }.value
             if copyOnly { copy(text); notice = "已复制当前完成译文" }
             else { saveText(text, name: snapshot.file + "-双语.txt") }

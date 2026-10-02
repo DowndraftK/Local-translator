@@ -10,34 +10,37 @@ import SwiftUI
         NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    private var terminating = false
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if state?.busy == true || state?.streaming.busy == true || state?.textTask.job != nil || state?.documentTask.snapshot != nil {
+        guard !terminating else { return .terminateLater }
+        if state?.busy == true || state?.streaming.busy == true {
             let alert = NSAlert()
-            alert.messageText = state?.busy == true || state?.streaming.busy == true ? "停止当前任务并退出？" : "退出应用？"
-            var messages: [String] = []
-            if state?.textTask.job != nil {
-                messages.append("文字翻译结果仅保留于当前窗口，退出后不能恢复。请先复制已有译文或导出双语 TXT；尚未完成的段落不会继续处理。")
-            }
-            if state?.documentTask.snapshot != nil { messages.append("文档识别结果、校正文字（含未保存草稿）、核对状态及译文仅保留于当前窗口，退出后不会恢复。请先复制或导出双语 TXT；停止后重新开始是一轮新任务。") }
-            if state?.streaming.busy == true { messages.append("录音任务中已保存的英文和翻译会保留，重新打开任务可补译。请优先在录音页停止任务并等待尾句保存；立即退出可能留下未完成的识别部分。") }
-            if messages.isEmpty { messages.append("当前处理尚未完成；退出会停止当前任务。") }
-            alert.informativeText = messages.joined(separator: "\n\n")
-            alert.addButton(withTitle: state?.textTask.job != nil || state?.documentTask.snapshot != nil ? "退出并丢弃未导出的结果" : "停止并退出"); alert.addButton(withTitle: "返回应用")
+            alert.messageText = "停止当前任务、保存并退出？"
+            alert.informativeText = "文字和文档会保存当前原文、草稿及完整完成的译文。重开后需主动继续，当前生成中的半段会标为中断。录音请优先在录音页停止并等待尾句保存；立即退出可能留下未完成的识别部分。"
+            alert.addButton(withTitle: "停止、保存并退出"); alert.addButton(withTitle: "返回应用")
             if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
         }
-        if state?.streaming.busy == true {
-            state?.streaming.stop()
-            Task { @MainActor [weak self] in
-                while self?.state?.streaming.busy == true {
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                }
-                self?.state?.shutdown()
+        terminating = true
+        if state?.streaming.busy == true { state?.streaming.stop() }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            while self.state?.streaming.busy == true { try? await Task.sleep(nanoseconds: 100_000_000) }
+            do {
+                try await self.state?.finishRecoveryForExit()
+                self.state?.shutdown()
                 NSApp.reply(toApplicationShouldTerminate: true)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "保存失败，返回应用导出结果？"
+                alert.informativeText = "已落盘内容仍保留；本次未保存内容可能丢失。\n" + error.localizedDescription
+                alert.addButton(withTitle: "返回应用"); alert.addButton(withTitle: "仍然退出")
+                let exit = alert.runModal() == .alertSecondButtonReturn
+                if exit { self.state?.shutdown() }
+                self.terminating = false
+                NSApp.reply(toApplicationShouldTerminate: exit)
             }
-            return .terminateLater
         }
-        state?.shutdown()
-        return .terminateNow
+        return .terminateLater
     }
 }
 

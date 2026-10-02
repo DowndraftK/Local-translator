@@ -1,0 +1,128 @@
+{
+  "version": "0.2.7",
+  "build": 25,
+  "date": "2026-10-02",
+  "scope": "text-document-recovery-first-round",
+  "swift": {
+    "registered": 56,
+    "passed": 55,
+    "skipped": 1,
+    "skipped_name": "finiteLocalOCRAcceptance"
+  },
+  "atomic_save": {
+    "max_ms": 13.85807991027832,
+    "median_ms": 2.899050712585449,
+    "p95_ms": 4.047036170959473,
+    "samples": 30,
+    "segments": 9,
+    "source_bytes": 16800
+  },
+  "final_ui": {
+    "long": {
+      "completed": 9,
+      "previous_successes_preserved": 3,
+      "attempts": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 1,
+        "5": 1,
+        "6": 1,
+        "7": 1,
+        "8": 1
+      },
+      "configuration_preserved": true,
+      "plan_preserved": true,
+      "all_source_and_results_exported": true
+    },
+    "pdf": {
+      "completed": 12,
+      "previous_successes_preserved": 10,
+      "attempts": {
+        "0": 1,
+        "1": 1,
+        "10": 2,
+        "11": 1,
+        "2": 3,
+        "3": 1,
+        "4": 1,
+        "5": 1,
+        "6": 1,
+        "7": 1,
+        "8": 1,
+        "9": 1
+      },
+      "configuration_preserved": true,
+      "plan_preserved": true,
+      "all_source_and_results_exported": true
+    },
+    "ocr": {
+      "completed": 2,
+      "previous_successes_preserved": 0,
+      "attempts": {
+        "0": 2,
+        "1": 1
+      },
+      "configuration_preserved": true,
+      "plan_preserved": true,
+      "all_source_and_results_exported": true,
+      "raw_ocr_preserved": true,
+      "effective_revision_and_review_preserved": true,
+      "unapplied_draft_recovered": true,
+      "draft_excluded_from_export": true
+    },
+    "txt": {
+      "completed": 3,
+      "previous_successes_preserved": 0,
+      "attempts": {
+        "0": 2,
+        "1": 1,
+        "2": 1
+      },
+      "source_bytes": 5423,
+      "source_characters": 1839,
+      "normal_exit_and_reopen": true,
+      "configuration_preserved": true,
+      "plan_preserved": true,
+      "all_source_and_results_exported": true
+    },
+    "final_crash": {
+      "phase": "running",
+      "states": [
+        "completed",
+        "completed",
+        "processing",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending"
+      ],
+      "seconds_since_last_saved": 0.011377811431884766
+    }
+  },
+  "package": {
+    "strict_signature": true,
+    "zip_integrity": true,
+    "zip_matches_bundle": true,
+    "executables_match_release": true,
+    "python_files_match": 13
+  },
+  "configuration": {
+    "version": 1,
+    "splitter_version": "natural-language-utf8-v1",
+    "en_zh_profile": "hy-mt2-faithful-v1"
+  },
+  "storage_schema": 1,
+  "pending": [],
+  "deferred": [
+    "translation_quality_optimization",
+    "physical_device_sleep_disk_full_acceptance"
+  ],
+  "temporary_processes_finished": true
+}
