@@ -55,7 +55,7 @@ struct WorkspaceView: View {
             VStack(alignment: .leading, spacing: 9) {
                 Label(state.serviceAvailable ? "本机服务已连接" : state.serviceChecked ? "本机服务未连接" : "正在检查本机服务", systemImage: state.serviceAvailable ? "checkmark.circle.fill" : "circle.dotted")
                     .font(.system(size: 11)).foregroundStyle(state.serviceAvailable ? accent : .secondary)
-                Text("M0 交互测试版").font(.system(size: 11, weight: .medium))
+                Text("0.2.9 个人自用初版").font(.system(size: 11, weight: .medium))
                 Text("模型与结果在本机处理\n当前功能仍需质量核对")
                     .font(.system(size: 10)).foregroundStyle(.secondary).lineSpacing(3)
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -402,7 +402,7 @@ struct ResourceWorkspace: View {
                     ReviewHint(text: "目录应包含 whisper-coreml、whisper-tokenizer 和 whisper-tokenizer-small.en。这里只检查文件位置，开始处理时会进行完整校验和实际加载。")
                 }
                 resourceCard(title: "关于这个测试包", symbol: "shippingbox") {
-                    Text("本地翻译器 · M0 交互测试版").font(.system(size: 14, weight: .medium))
+                    Text("本地翻译器 · 0.2.9 个人自用初版").font(.system(size: 14, weight: .medium))
                     Text("适用于这台 Apple Silicon Mac，macOS 26 或更新版本。\n应用包复用本机 Ollama 和语音模型；移动应用无需复制权重，移动模型后请重新选择资源目录。")
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(5)
                     ReviewHint(text: "文字、文档和录音任务均保存在本机，可打开后主动继续。请核对期限、否定、统计限定和重复句；完成处理不代表内容正确。旧提取/选段与原生引擎对照仍使用临时目录。")

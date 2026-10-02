@@ -173,6 +173,19 @@ async def execute(args, store):
 
     publisher = asyncio.create_task(publish_periodically())
     monitor = asyncio.create_task(measure_periodically())
+    background_errors = []
+
+    def storage_task_finished(task):
+        if not task.cancelled() and task.exception() is not None:
+            # A failed UI projection or metadata commit must stop capture too.
+            # Disk-full can prevent persisting the error; the nonzero worker exit
+            # and stderr remain the app's independent failure signal.
+            background_errors.append(task.exception())
+            logging.error('录音状态保存失败，停止输入：%s', task.exception())
+            stop.set()
+
+    publisher.add_done_callback(storage_task_finished)
+    monitor.add_done_callback(storage_task_finished)
     translator = asyncio.create_task(translation_loop(store, done, stop))
     stop_task = asyncio.create_task(stop.wait())
     error = None
@@ -225,8 +238,10 @@ async def execute(args, store):
             if not task.done():
                 task.cancel()
         await asyncio.gather(publisher, monitor, translator, stop_task, return_exceptions=True)
+        if background_errors:
+            error = error or '录音状态保存失败：' + str(background_errors[0])
         counts = store.snapshot()['translation_counts']
-        state = ('stopped' if stop.is_set() else 'failed' if error else
+        state = ('failed' if error else 'stopped' if stop.is_set() else
                  'needs_translation' if counts['failed'] or counts['pending'] or counts['running'] else
                  'recorded' if args.command == 'record' else
                  'completed' if store.get('asr_complete') else 'incomplete_asr')

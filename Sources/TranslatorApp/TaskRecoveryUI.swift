@@ -56,6 +56,10 @@ extension AppState {
             let saved = try await recoveryStore.save(record, assetData: assetData)
             if saved, generation == dirtyGeneration {
                 savingStatus = "已自动保存 \(record.updated.formatted(date: .omitted, time: .standard)) · \(Int(Date().timeIntervalSince(start) * 1000)) ms"
+                if let failure = persistenceFailure,
+                   self.error == "自动保存失败，已停止继续处理：" + failure {
+                    self.error = nil
+                }
                 persistenceFailure = nil
             }
         } catch {

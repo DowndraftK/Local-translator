@@ -50,7 +50,7 @@ build_number=int((app.parent/'build-number.txt').read_text())
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.8', 'CFBundleVersion':str(build_number),
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.9', 'CFBundleVersion':str(build_number),
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
@@ -72,7 +72,7 @@ codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
 cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.8 翻译质量评审与模型优化测试版
+本地翻译器 — 0.2.9 个人自用正式初版候选
 
 双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
 应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
@@ -91,6 +91,9 @@ cat > "$output_root/使用说明.txt" <<'TXT'
 本包可在这台 Mac 上移动使用；换到其他机器仍需另行准备 Ollama 和模型。
 
 文字/文档保存目录为 ~/Library/Application Support/LocalTranslator/TextDocuments，每任务保留 current.json、上一份有效 previous.json 及源副本。输入和编辑草稿防抖350ms，处理在每页/段持久化成功后继续；异常退出只保证已落盘内容，当前半段和未保存缓冲不保证。保存失败会停止调度并提示，正常退出等待保存；失败可返回导出或明确退出。损坏/未来格式不会静默覆盖。
+
+录音状态或数据库保存失败会停止本次工作进程；请检查错误与最后有效保存边界，再打开任务读取或导出。空间不足可能使错误本身也无法落盘，不能以旧快照的“录音中”判断工作进程仍在录音。恢复仅处理已保存音频，未写入缓冲不保证零损失。备份需复制整个已停止任务目录，保留SQLite及WAL。
+具体实体故障验收结果与未验证项以项目 docs/0.2.9实体故障与恢复验收记录.md 为准。使用与恢复办法见 docs/正式初版使用与恢复说明.md。真实课堂、复杂文档/Office、完整断网/外连审计继续保留限制。
 
 这是使用本机临时签名生成的自用测试包，未经过 Developer ID 公证或公开分发验收。
 语音保留原始时间依据，异常时间会提示核对；回放与 TXT/SRT/VTT 使用同一有效时间，导出不再累计顺延交叠。

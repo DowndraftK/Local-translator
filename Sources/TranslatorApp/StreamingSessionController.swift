@@ -93,7 +93,11 @@ struct StreamingSnapshot: Decodable {
     }
 
     var library: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--recordings-root"), index + 1 < arguments.count {
+            return URL(fileURLWithPath: arguments[index + 1], isDirectory: true)
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("LocalTranslator/Recordings", isDirectory: true)
     }
     var countDescription: String {
@@ -178,9 +182,14 @@ struct StreamingSnapshot: Decodable {
                 self.inputPipe = nil; self.process = nil; self.busy = false; self.stopping = false
                 self.watcher?.cancel(); self.watcher = nil; self.refresh()
                 self.status = self.statusDescription()
-                if child.terminationStatus != 0 && !self.userStopped {
-                    self.error = self.snapshot?.error ?? self.snapshot?.asr_error
-                        ?? String(((try? String(contentsOf: logURL, encoding: .utf8)) ?? "工作进程未正常结束。").suffix(1800))
+                if child.terminationStatus != 0 {
+                    self.status = "工作进程异常结束；请检查最后保存位置后继续识别或补译"
+                    let diagnostic = String(((try? String(contentsOf: logURL, encoding: .utf8)) ?? "").suffix(1800))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.error = self.snapshot?.error ?? self.snapshot?.asr_error ?? self.error
+                        ?? (diagnostic.isEmpty
+                            ? "工作进程未正常结束（退出码 \(child.terminationStatus)），本次保存未确认。请检查存储空间，再打开已保存任务；未落盘缓冲可能丢失。"
+                            : diagnostic)
                 }
             }
         }
@@ -236,7 +245,7 @@ struct StreamingSnapshot: Decodable {
         case "loading": return "正在加载语音模型…"
         case "refining": return "正在根据完整录音重新校对英文 · 原版字幕保留"
         case "recognizing": return recording ? "正在录音 · 英文先保存，中文随后显示" : "正在识别 · 英文先保存，中文随后显示"
-        case "recording": return "仅录音 · 正在保存，稍后可继续识别"
+        case "recording": return recording ? "仅录音 · 正在保存，稍后可继续识别" : "正在准备麦克风，尚未采集"
         case "recorded": return "录音已保存 · 点击继续识别生成字幕"
         case "finishing_asr": return "正在提交录音末尾…"
         case "translating": return "英文已保存，正在补齐中文…"

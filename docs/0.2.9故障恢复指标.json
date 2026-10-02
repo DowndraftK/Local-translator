@@ -1,0 +1,236 @@
+{
+  "schema": 1,
+  "date": "2026-10-02",
+  "version": "0.2.9",
+  "candidate_build": 32,
+  "delivery_status": "pending_physical_user_operations",
+  "baseline": {
+    "baseline_version": "0.2.8",
+    "baseline_build": 28,
+    "model_digests": {
+      "hy-mt2:7b-q8": "202e0ccbae412a107d24c32bc08d7674c579c459a5942e7ed42e5fff631630d9",
+      "hy-mt2:1.8b-q8": "f5ee2ebab8a605d7790eee41a0a34bbc98b4b12792ad7cc9f216dd4949fd7ed1"
+    },
+    "runtime_files_matched": 14,
+    "resources_available": [
+      "artifacts/whisperlivekit-gpu-review-20260915/venv/bin/python",
+      "artifacts/whisperlivekit-speech-repair-20261001-final/source",
+      "artifacts/whisperlivekit-speech-repair-20261001-final/patched-source.json",
+      "models/whisper-mps-experiment/large-v3-turbo",
+      "experiments/whisperlivekit/mps-model-manifest.json"
+    ]
+  },
+  "tests": {
+    "swift_registered": 60,
+    "swift_executed_passed": 59,
+    "swift_ocr_skipped": 1,
+    "python_passed": 74
+  },
+  "package": {
+    "strict_signature": true,
+    "zip_matches_all_bundle_files": true,
+    "runtime_python_matches_source": 14,
+    "executables_match_release": true,
+    "directory": "dist/M0-20261002-161348-release"
+  },
+  "physical_storage": {
+    "volume_bytes": 33513472,
+    "actual_enospc": true,
+    "database_error": "database or disk is full",
+    "database_committed_prefix_preserved": true,
+    "wave": {
+      "exit": 120,
+      "stopped_after_seconds": 0.03871858299680753,
+      "durable_before_samples": 16000,
+      "readable_after_samples": 16000,
+      "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
+      "prefix_preserved": true,
+      "durable_metadata_samples": 16000
+    },
+    "state": {
+      "exit": 120,
+      "stopped_after_seconds": 0.5004819579989999,
+      "durable_before_samples": 16000,
+      "readable_after_samples": 16000,
+      "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
+      "prefix_preserved": true,
+      "durable_metadata_samples": 16000
+    }
+  },
+  "native_snapshot_full_build32": {
+    "actual_enospc": true,
+    "saved_prefix_unchanged_on_failure": true,
+    "resaved_after_release": true,
+    "stale_save_error_cleared": true
+  },
+  "process_crash_recovery": {
+    "pdf": {
+      "build_at_kill": 30,
+      "saved_revision": 70,
+      "states_at_kill": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "processing",
+        "pending"
+      ],
+      "seconds_since_snapshot_mtime": 0.010836601257324219,
+      "completed_after": 12,
+      "successful_prefix_rows_unchanged": 10,
+      "recipe_preserved": true,
+      "old_original_preserved": true
+    },
+    "text": {
+      "build_at_kill": 30,
+      "saved_revision": 18,
+      "states_at_kill": [
+        "completed",
+        "completed",
+        "completed",
+        "processing",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending"
+      ],
+      "seconds_since_snapshot_mtime": 0.002658367156982422,
+      "completed_after": 9,
+      "successful_prefix_rows_unchanged": 3,
+      "recipe_preserved": true,
+      "old_original_preserved": true
+    },
+    "ocr": {
+      "build_at_kill": 31,
+      "saved_revision": 2,
+      "states_at_kill": [
+        "processing",
+        "pending"
+      ],
+      "seconds_since_snapshot_mtime": 0.0011179447174072266,
+      "completed_after": 2,
+      "successful_prefix_rows_unchanged": 0,
+      "recipe_preserved": true,
+      "old_original_preserved": true
+    },
+    "txt": {
+      "build_at_kill": 31,
+      "saved_revision": 2,
+      "states_at_kill": [
+        "processing",
+        "pending",
+        "pending"
+      ],
+      "seconds_since_snapshot_mtime": 0.0051577091217041016,
+      "completed_after": 3,
+      "successful_prefix_rows_unchanged": 0,
+      "recipe_preserved": true,
+      "old_original_preserved": true
+    }
+  },
+  "short_audio_asr": {
+    "build": 32,
+    "input_seconds": 45,
+    "worker_exit": -9,
+    "resume_exit": 0,
+    "checkpoint_sample": 237952,
+    "prefix_segments": 2,
+    "segments_at_kill": 3,
+    "segments_after_resume": 8,
+    "audio_samples": 720000,
+    "audio_sha256": "979a616e8c32468b3c1dd1d04ff197087a701967587b05e4d02634b354f4a54c",
+    "audio_unchanged": true,
+    "prefix_rows_unchanged": true,
+    "runtime_resources_unchanged": true,
+    "recovery_history_count": 1,
+    "asr_complete": true,
+    "database_integrity": "ok",
+    "no_microphone": true,
+    "no_translation_during_asr": true,
+    "last_archived_uncertain_tail_segments": 1
+  },
+  "subtitle_translation": {
+    "build": 32,
+    "explicit_independent_fixture_from_saved_english": true,
+    "model": "hy-mt2:7b-q8",
+    "recipe_version": 2,
+    "context_version": "none-v1",
+    "worker_exit": -9,
+    "retry_exit": 0,
+    "completed_before": 1,
+    "running_before": 1,
+    "completed_after": 8,
+    "successful_rows_unchanged": true,
+    "full_configuration_unchanged": true,
+    "database_integrity": "ok",
+    "export_formats": [
+      "txt",
+      "srt",
+      "vtt"
+    ]
+  },
+  "manual_pending": [
+    "normal_short_microphone_capture_pause_continue_stop_reopen_playback",
+    "first_permission_denial",
+    "permission_revocation_and_allow",
+    "actual_computer_sleep_wake",
+    "microphone_ui_actual_disk_full"
+  ],
+  "unverified": [
+    {
+      "scenario": "external_microphone_unplug_replug",
+      "reason": "user_has_no_external_input_device",
+      "user_acceptance": "pending"
+    }
+  ],
+  "accepted_quality_limits": [
+    "D02 by/之前 (review_errata applies)",
+    "D20 before/by",
+    "H09 median/average",
+    "some negation scope errors"
+  ],
+  "inherited_evidence": [
+    "0.2.7/build25",
+    "0.2.8/build28",
+    "0.2.6/build21 ASR history only"
+  ],
+  "git": {
+    "branch": "codex/fault-recovery-release",
+    "commit_and_push": "pending"
+  },
+  "final_bundle_flows": {
+    "text": {
+      "model": "hy-mt2:7b-q8",
+      "recipe_version": 2,
+      "completed": 1,
+      "export_complete": true,
+      "saved": true
+    },
+    "document": {
+      "model": "hy-mt2:7b-q8",
+      "recipe_version": 2,
+      "completed": 1,
+      "source_preserved": true,
+      "export_complete": true,
+      "saved": true
+    },
+    "short_audio_playback_start_pause": true,
+    "native_subtitle_export": "pending_python_startup_file_read_block",
+    "command_line_subtitle_exports": [
+      "txt",
+      "srt",
+      "vtt"
+    ]
+  },
+  "additional_pending": [
+    "native_python_startup_block_in_final_app",
+    "mac_unlock_for_ui_verification"
+  ]
+}
