@@ -69,6 +69,8 @@ struct StreamingSnapshot: Decodable {
     @Published var playbackRate: Float = 1 { didSet { player?.rate = playbackRate } }
     @Published var isPlaying = false
     private var process: Process?
+    private var activeCommand: String?
+    private var workerStarted = false
     private var inputPipe: Pipe?
     private var watcher: Task<Void, Never>?
     private var microphone: MicrophoneCapture?
@@ -167,6 +169,7 @@ struct StreamingSnapshot: Decodable {
         env["PYTHONPATH"] = runtime.path
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         env["NUMBA_CACHE_DIR"] = folder.appendingPathComponent("numba-cache").path
+        env["LOCAL_TRANSLATOR_STARTUP_TOKEN"] = launchID.uuidString
         child.environment = env
         let logURL = folder.appendingPathComponent("worker-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
@@ -179,7 +182,8 @@ struct StreamingSnapshot: Decodable {
                 guard let self, self.process === child else { return }
                 self.microphone?.stop(); self.microphone = nil; self.recording = false
                 self.paused = false; self.pauseInProgress = false; self.microphoneSession = false
-                self.inputPipe = nil; self.process = nil; self.busy = false; self.stopping = false
+                self.inputPipe = nil; self.process = nil; self.activeCommand = nil
+                self.workerStarted = false; self.busy = false; self.stopping = false
                 self.watcher?.cancel(); self.watcher = nil; self.refresh()
                 self.status = self.statusDescription()
                 if child.terminationStatus != 0 {
@@ -190,19 +194,32 @@ struct StreamingSnapshot: Decodable {
                         ?? (diagnostic.isEmpty
                             ? "工作进程未正常结束（退出码 \(child.terminationStatus)），本次保存未确认。请检查存储空间，再打开已保存任务；未落盘缓冲可能丢失。"
                             : diagnostic)
+                } else if arguments.first == "export", let output = arguments.last {
+                    self.status = "字幕已导出：\(URL(fileURLWithPath: output).lastPathComponent)"
                 }
             }
         }
-        process = child; busy = true; stopping = false; status = "正在校验资源并加载模型…"
+        process = child; activeCommand = arguments.first; workerStarted = false
+        busy = true; stopping = false; status = "正在启动本机工作进程…"
+        let launchedAt = Date()
         do { try child.run() }
         catch {
-            process = nil; busy = false; try? log.close()
+            process = nil; activeCommand = nil; busy = false; try? log.close()
             try? inputPipe?.fileHandleForWriting.close(); inputPipe = nil
             self.error = error.localizedDescription
             throw error
         }
         watcher = Task { @MainActor [self] in
             while !Task.isCancelled && self.operationID == launchID {
+                if !self.workerStarted {
+                    let startupLog = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+                    self.workerStarted = startupLog.contains(launchID.uuidString)
+                    if !self.workerStarted && Date().timeIntervalSince(launchedAt) >= 30 {
+                        self.error = "本机工作进程启动超时，本次操作未确认。请检查资源目录的访问权限及系统提示，再主动重试；已保存任务保留。"
+                        self.stop()
+                        break
+                    }
+                }
                 self.refresh()
                 self.status = self.statusDescription()
                 if microphoneRequested && ["recognizing", "recording"].contains(self.snapshot?.state ?? "") && self.microphone == nil && !self.userStopped && !self.paused {
@@ -237,6 +254,15 @@ struct StreamingSnapshot: Decodable {
     private func statusDescription() -> String {
         if stopping { return snapshot?.state == "refining" ? "正在停止 · 等待当前校对保存后退出…" : "正在停止输入并保存尾句…" }
         if paused { return pauseInProgress ? "正在保存暂停前的录音…" : "录音已暂停 · 点击继续录音恢复" }
+        if busy, process != nil {
+            if !workerStarted { return "正在启动本机工作进程…" }
+            switch activeCommand {
+            case "export": return "正在导出字幕…"
+            case "revise": return "正在保存英文修订…"
+            case "page": return "正在读取字幕页…"
+            default: break
+            }
+        }
         if !busy, ["preparing", "loading", "recognizing", "recording", "finishing_asr", "translating", "refining"].contains(snapshot?.state ?? "") {
             return "上次任务中断；可继续识别已保存录音或补译已有英文"
         }

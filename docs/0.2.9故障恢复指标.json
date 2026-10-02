@@ -2,7 +2,7 @@
   "schema": 1,
   "date": "2026-10-02",
   "version": "0.2.9",
-  "candidate_build": 32,
+  "candidate_build": 33,
   "delivery_status": "pending_physical_user_operations",
   "baseline": {
     "baseline_version": "0.2.8",
@@ -24,14 +24,14 @@
     "swift_registered": 60,
     "swift_executed_passed": 59,
     "swift_ocr_skipped": 1,
-    "python_passed": 74
+    "python_passed": 75
   },
   "package": {
     "strict_signature": true,
     "zip_matches_all_bundle_files": true,
     "runtime_python_matches_source": 14,
     "executables_match_release": true,
-    "directory": "dist/M0-20261002-161348-release"
+    "directory": "dist/M0-20261002-233117-release"
   },
   "physical_storage": {
     "volume_bytes": 33513472,
@@ -40,7 +40,7 @@
     "database_committed_prefix_preserved": true,
     "wave": {
       "exit": 120,
-      "stopped_after_seconds": 0.03871858299680753,
+      "stopped_after_seconds": 0.02264366600138601,
       "durable_before_samples": 16000,
       "readable_after_samples": 16000,
       "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
@@ -49,13 +49,14 @@
     },
     "state": {
       "exit": 120,
-      "stopped_after_seconds": 0.5004819579989999,
+      "stopped_after_seconds": 0.48761712499981513,
       "durable_before_samples": 16000,
       "readable_after_samples": 16000,
       "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
       "prefix_preserved": true,
       "durable_metadata_samples": 16000
-    }
+    },
+    "build": 33
   },
   "native_snapshot_full_build32": {
     "actual_enospc": true,
@@ -203,7 +204,9 @@
   ],
   "git": {
     "branch": "codex/fault-recovery-release",
-    "commit_and_push": "pending"
+    "first_independent_commit": "5321bb0",
+    "first_independent_push": "success",
+    "final_delivery_commit": "pending_physical_acceptance"
   },
   "final_bundle_flows": {
     "text": {
@@ -227,10 +230,50 @@
       "txt",
       "srt",
       "vtt"
-    ]
+    ],
+    "evidence_build": 32,
+    "startup_status_changes_in_build33": "pending_native_retest"
   },
   "additional_pending": [
     "native_python_startup_block_in_final_app",
     "mac_unlock_for_ui_verification"
-  ]
+  ],
+  "physical_storage_build31": {
+    "volume_bytes": 33513472,
+    "actual_enospc": true,
+    "database_error": "database or disk is full",
+    "database_committed_prefix_preserved": true,
+    "wave": {
+      "exit": 120,
+      "stopped_after_seconds": 0.03871858299680753,
+      "durable_before_samples": 16000,
+      "readable_after_samples": 16000,
+      "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
+      "prefix_preserved": true,
+      "durable_metadata_samples": 16000
+    },
+    "state": {
+      "exit": 120,
+      "stopped_after_seconds": 0.5004819579989999,
+      "durable_before_samples": 16000,
+      "readable_after_samples": 16000,
+      "saved_prefix_sha256": "6f34815c260b8acc74087613c195ed296f1c6db38b8682529dc518450f57bbf2",
+      "prefix_preserved": true,
+      "durable_metadata_samples": 16000
+    }
+  },
+  "startup_protocol": {
+    "native_opt_in_ack": true,
+    "ordinary_cli_json_unchanged": true,
+    "automatic_regression_passed": true,
+    "native_startup_timeout_seconds": 30,
+    "native_retest": "pending_unlock"
+  },
+  "cleanup": {
+    "trial_app_and_workers_stopped": true,
+    "test_volume_ejected": true,
+    "local_evidence_and_image_preserved": true,
+    "scheduler_created": false,
+    "original_ollama_stopped": false
+  }
 }

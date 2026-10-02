@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import json
 import logging
+import os
 from pathlib import Path
 import signal
 import sys
@@ -259,6 +260,11 @@ async def execute(args, store):
 def main():
     args = arguments()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s', stream=sys.stderr)
+    startup_token = os.environ.get('LOCAL_TRANSLATOR_STARTUP_TOKEN')
+    if startup_token:
+        # Acknowledge interpreter startup before opening task files or loading
+        # models. Only the native launcher opts in; normal CLI JSON is unchanged.
+        print(json.dumps({'event': 'worker_started', 'token': startup_token}), flush=True)
     if args.command == 'configure':
         root = args.project.resolve()
         config = {'source': str(root/'artifacts/whisperlivekit-speech-repair-20261001-final/source'),

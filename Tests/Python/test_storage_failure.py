@@ -1,4 +1,8 @@
 import asyncio
+import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 import wave
 
@@ -57,3 +61,24 @@ def test_background_storage_failure_stops_idle_capture_and_cannot_report_recorde
         assert store.get('asr_complete') is False
     finally:
         store.close()
+
+
+def test_native_startup_ack_precedes_status_and_cli_json_stays_single_record(tmp_path):
+    """A native launcher can distinguish interpreter startup from stale snapshots."""
+    session = tmp_path / 'session'
+    store = SessionStore(session)
+    store.initialize(translation_model=None)
+    session_id = store.get('session_id')
+    store.close()
+    command = [sys.executable, '-m', 'streaming_translator', 'status', '--session', str(session)]
+    env = dict(os.environ)
+    env.pop('LOCAL_TRANSLATOR_STARTUP_TOKEN', None)
+    ordinary = subprocess.run(command, env=env, capture_output=True, text=True, check=True, timeout=10)
+    assert len(ordinary.stdout.splitlines()) == 1
+    assert json.loads(ordinary.stdout)['session_id'] == session_id
+    env['LOCAL_TRANSLATOR_STARTUP_TOKEN'] = 'native-test-startup'
+    native = subprocess.run(command, env=env, capture_output=True, text=True, check=True, timeout=10)
+    lines = native.stdout.splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0]) == {'event': 'worker_started', 'token': 'native-test-startup'}
+    assert json.loads(lines[1])['session_id'] == session_id
