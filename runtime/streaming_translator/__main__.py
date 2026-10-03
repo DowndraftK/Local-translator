@@ -95,6 +95,7 @@ async def translation_loop(store, done, stop):
 
 
 async def execute(args, store):
+    from .resources import resolve_config
     stop, done = asyncio.Event(), asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -104,6 +105,7 @@ async def execute(args, store):
         if args.max_audio_seconds is not None and args.max_audio_seconds <= 0:
             raise ValueError('测试音频长度必须大于零。')
         config = json.loads(args.config.read_text())
+        config = resolve_config(config)
         config['vad'] = not args.no_vad
         for key in ['device', 'dtype']:
             if getattr(args, key):
@@ -124,6 +126,7 @@ async def execute(args, store):
         atomic_json(store.directory/'runtime.json', config)
     elif args.command == 'record':
         config = json.loads(args.config.read_text())
+        config = resolve_config(config)
         store.initialize(translation_model=None if args.no_translation else args.translation_model,
                          translation_configuration=None if args.no_translation else recipe(args.translation_model),
                          input_kind='recording', endpoint='http://127.0.0.1:11434')
@@ -132,12 +135,14 @@ async def execute(args, store):
         from .capture import validate_resume
         from .asr import validate_resources
         config = json.loads((store.directory/'runtime.json').read_text())
+        config = resolve_config(config, store.get('resources_digest'))
         checkpoint = validate_resume(store, config)
         await asyncio.to_thread(validate_resources, config)
         store.restart_from_checkpoint(checkpoint)
     elif args.command == 'refine':
         from .refine import initialize_refinement
         config = json.loads(args.config.read_text())
+        config = resolve_config(config)
         initialize_refinement(store, args.from_session)
         atomic_json(store.directory/'runtime.json', config)
     else:
@@ -226,6 +231,15 @@ async def execute(args, store):
                 store.update(asr_error=error)
                 logging.exception('ASR failed; saved English and pending jobs are retained')
             finally:
+                if args.command != 'record':
+                    # recognize/refine has returned after durable tail handling.
+                    # Queue on the same executor so an already-running inference
+                    # cannot race release, including the failure/cancel path.
+                    from .lifecycle import release_speech_resources
+                    try:
+                        store.update(speech_release=await asyncio.to_thread(release_speech_resources))
+                    except Exception as exc:
+                        error = error or '语音资源释放或记录失败：' + str(exc)
                 done.set()
         store.update(state='translating')
         finished, _ = await asyncio.wait([translator, stop_task], return_when=asyncio.FIRST_COMPLETED)

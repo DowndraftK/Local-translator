@@ -1,6 +1,6 @@
 # 本机流式字幕运行环境
 
-更新：2026-10-03，0.2.9/build35个人自用正式初版已交付。实盘/进程故障、内置麦克风首次拒绝/撤回/重新允许、暂停/继续/停止、真实休眠及麦克风满盘验收与必要修复完成。无外置输入设备，实际拔插未验证且用户已明确接受。0.2.6封存识别源码保持，0.2.8固定7B-v2及旧任务兼容不变；运行层适配器为真实退出故障关闭ONNX遥测，识别算法/配置、翻译recipe及资源校验保持。
+更新：2026-10-03。0.2.10/build46 整合候选已形成独立 Python/固定库/识别代码包；原 0.2.9/build35 和开发环境保持。生命周期释放、外部资源定位、安装/修复/回退与 DMG/ZIP 的实际证据见[开发记录](../docs/0.2.10运行环境整合与安装开发记录.md)、[指标](../docs/0.2.10安装与发行指标.json)及[安装说明](../docs/0.2.10安装与修复说明.md)。语音包仅本地校验导入，公开托管和解码库分发条件仍待落实。没有升级已验证的 Torch/MLX/ONNX/PyAV 或改变识别算法/精度；build35 ONNX退出修复和30秒真实worker启动保护保持。
 
 ## 在应用中使用
 
@@ -15,21 +15,22 @@
 
 录音任务默认保存在 `~/Library/Application Support/LocalTranslator/Recordings/<UUID>/`。界面的“打开任务目录”可直接定位。备份时复制整个目录，包含数据库、录音和运行配置；任务运行中不宜只复制数据库主文件，因为未合并事务可能位于 WAL 文件中。
 
-## 当前机器所需资源
+## 0.2.10 运行软件与外部资源
 
-应用包内包含 Python 运行代码。以下较大资源留在项目目录，应用中的语音资源位置应选择本项目的 `models` 文件夹：
+App 的“本机资源”分项检查，文字就绪即可使用。已有 Ollama0.35.0兼容服务直接复用，不停原服务、不卸载共享模型、不改全局设置；缺失时主动准备官方固定包。语音软件为 `dist/Runtime-0.2.10-r5/speech-runtime-0.2.10-r5-macos-arm64.zip`，大小和 SHA 见指标；尚无公开下载URL，可在本机资源页导入。运行包包括 CPython3.12.14、固定依赖及原封存识别代码的执行部分，保留完整原身份和10项测试工具裁剪差异。没有权重、config、分词/梅尔编码或VAD数据。
 
-| 资源 | 项目内位置 |
+默认环境位于 `~/Library/Application Support/LocalTranslator/Environments`，模型和任务各自独立。外部资源目录需包含：
+
+| 内容 | 相对外部资源目录的位置 |
 | --- | --- |
-| Python 3.12 环境 | `artifacts/whisperlivekit-gpu-review-20260915/venv` |
-| 固定 WhisperLiveKit 补丁源码 | `artifacts/whisperlivekit-speech-repair-20261001-final/source` |
-| 补丁指纹 | `artifacts/whisperlivekit-speech-repair-20261001-final/patched-source.json` |
-| MLX large-v3-turbo 权重 | `models/whisper-mps-experiment/large-v3-turbo` |
-| 模型基线 | `experiments/whisperlivekit/mps-model-manifest.json` |
-| 中文模型 | 本机 Ollama 中的 `hy-mt2:7b-q8`（新默认），`hy-mt2:1.8b-q8`（手动速度选项及旧任务） |
+| MLX large-v3-turbo 完整模型 | `whisper-mps-experiment/large-v3-turbo` |
+| 同内容的分词/梅尔编码/VAD资源 | `speech-runtime-data-v1` |
+| HY-MT2完整模型含分词信息 | 本机 Ollama 模型库，默认7B-v2；1.8B仅手动/旧任务 |
+| CoreML与tokenizer | 原对照入口可选，不是流式主功能必装项 |
 
-资源准备方法见 [固定源码、依赖与模型](../experiments/whisperlivekit/README.md)。当前机器已经准备好。请勿清理上述 `artifacts` 目录后继续使用应用；本版不是脱离项目目录的独立安装包。重建环境后可使用固定的 `requirements-mps-trial.txt`，不会在识别过程中自动下载模型。
+已有匹配资源复用。重新定位旧任务使用有效配置副本，不改旧 `runtime.json`；旧路径不可读时，必须有已保存内容digest并重算一致。模型/封存源码不配则拒绝继续，仍可读取和导出。独立解释器 `-I -B` 启动，明确App包内bootstrap、任务cwd、受管理库和外部资产路径，清理继承Python/Conda/DYLD变量。整个子进程持有使用锁，安装不能在任务中切环境。
 
+原开发复现仍可使用 `artifacts/whisperlivekit-gpu-review-20260915/venv`、`artifacts/whisperlivekit-speech-repair-20261001-final/source`、`patched-source.json` 与 `experiments/whisperlivekit/mps-model-manifest.json`，下方开发命令针对原开发环境。它们不是0.2.10独立安装的主依赖，且不能为测试裁剪或覆盖。固定来源与完整依赖见[开发清单](../experiments/whisperlivekit/README.md)。
 实时路线固定为 **MLX GPU 编码 → PyTorch/MPS FP32 解码 → SimulStreaming 提交**，可选 CPU 解码作对照。MPS 不可用时明确失败，禁止静默回退。录后校对采用完整 MLX Whisper 推理，使用相同权重。两者是不同处理方式，校对耗时不能当作实时字幕延迟。
 
 ## 开发与复现

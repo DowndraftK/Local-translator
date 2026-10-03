@@ -1,6 +1,7 @@
 import AppKit
 @preconcurrency import AVFoundation
 import Foundation
+import Darwin
 import SwiftUI
 import TranslatorCore
 import UniformTypeIdentifiers
@@ -31,6 +32,7 @@ struct StreamingSnapshot: Decodable {
     let session_id: String?
     let state: String?
     let audio_path: String?
+    let audio_sha256: String?
     let source_path: String?
     let audio_seconds: Double?
     let received_audio_seconds: Double?
@@ -68,6 +70,7 @@ struct StreamingSnapshot: Decodable {
     @Published var translationEnabled = true
     @Published var playbackRate: Float = 1 { didSet { player?.rate = playbackRate } }
     @Published var isPlaying = false
+    private var runtimeLease: Int32?
     private var process: Process?
     private var activeCommand: String?
     private var workerStarted = false
@@ -125,12 +128,13 @@ struct StreamingSnapshot: Decodable {
                 let destination = library.appendingPathComponent(UUID().uuidString, isDirectory: true)
                 try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
                 folder = destination; snapshot = nil; userStopped = false
-                let project = URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()
+                let resources = URL(fileURLWithPath: resourceRoot)
+                let managed = try RuntimePaths.speech()
                 let config: [String: Any] = [
-                    "source": project.appendingPathComponent("artifacts/whisperlivekit-speech-repair-20261001-final/source").path,
-                    "source_manifest": project.appendingPathComponent("artifacts/whisperlivekit-speech-repair-20261001-final/patched-source.json").path,
-                    "model": project.appendingPathComponent("models/whisper-mps-experiment/large-v3-turbo").path,
-                    "model_manifest": project.appendingPathComponent("experiments/whisperlivekit/mps-model-manifest.json").path,
+                    "source": managed.appendingPathComponent("Code/source").path,
+                    "source_manifest": managed.appendingPathComponent("Code/pinned-source.json").path,
+                    "model": URL(fileURLWithPath: resourceRoot).appendingPathComponent("whisper-mps-experiment/large-v3-turbo").path,
+                    "model_manifest": managed.appendingPathComponent("Code/model-manifest.json").path,
                     "device": useCPU ? "cpu" : "mps", "dtype": "float32", "max_context_tokens": 128]
                 let configURL = destination.appendingPathComponent("runtime.json")
                 try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]).write(to: configURL, options: .atomic)
@@ -142,7 +146,7 @@ struct StreamingSnapshot: Decodable {
                 else if let input { args += ["--input", input.path] }
                 else { throw failure("请先选择录音。") }
                 if paced && !microphone { args.append("--paced") }
-                try launch(args, project: project, microphoneRequested: microphone)
+                try launch(args, resources: resources, microphoneRequested: microphone)
             } catch {
                 guard operationID == requestID else { return }
                 self.error = error.localizedDescription; busy = false; stopping = false
@@ -151,23 +155,35 @@ struct StreamingSnapshot: Decodable {
         }
     }
 
-    private func launch(_ arguments: [String], project: URL, microphoneRequested: Bool = false) throws {
+    private func launch(_ arguments: [String], resources: URL, microphoneRequested: Bool = false) throws {
         guard let folder else { return }
-        let python = project.appendingPathComponent("artifacts/whisperlivekit-gpu-review-20260915/venv/bin/python")
+        let managed = try RuntimePaths.speech()
+        let python = managed.appendingPathComponent("Python/bin/python3.12")
         let bundledRuntime = Bundle.main.resourceURL?.appendingPathComponent("StreamingRuntime")
         let runtime = bundledRuntime.flatMap { FileManager.default.fileExists(atPath: $0.appendingPathComponent("streaming_translator/__main__.py").path) ? $0 : nil }
-            ?? project.appendingPathComponent("runtime")
+        guard let runtime else { throw failure("未找到随应用签名的运行代码，请重新安装本应用。") }
         guard FileManager.default.isExecutableFile(atPath: python.path),
               FileManager.default.fileExists(atPath: runtime.appendingPathComponent("streaming_translator/__main__.py").path) else {
-            throw failure("未找到流式运行环境。请按项目 runtime/README.md 准备 Python 环境并重新打包应用。")
+            throw failure("语音运行环境未就绪，请在本机资源中安装或修复。")
         }
+        let lease = open(RuntimePaths.environmentRoot.appendingPathComponent(".usage.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
+        guard lease >= 0 else { throw failure("无法取得运行环境使用锁。") }
+        guard flock(lease, LOCK_SH | LOCK_NB) == 0 else { close(lease); throw failure("运行环境正在切换，请稍后重试。") }
+        runtimeLease = lease
         let child = Process()
         let launchID = UUID(); operationID = launchID
         child.executableURL = python
-        child.arguments = ["-m", "streaming_translator"] + arguments
-        child.currentDirectoryURL = project
-        var env = ProcessInfo.processInfo.environment
-        env["PYTHONPATH"] = runtime.path
+        child.arguments = ["-I", "-B", runtime.appendingPathComponent("worker_bootstrap.py").path] + arguments
+        child.currentDirectoryURL = folder
+        var env = ProcessInfo.processInfo.environment.filter { key, _ in
+            !["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "VIRTUAL_ENV", "CONDA_PREFIX", "CONDA_DEFAULT_ENV", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"].contains(key)
+        }
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        env["LOCAL_TRANSLATOR_RUNTIME_ROOT"] = managed.path
+        env["LOCAL_TRANSLATOR_MODEL_PATH"] = resources.appendingPathComponent("whisper-mps-experiment/large-v3-turbo").path
+        env["LOCAL_TRANSLATOR_ASSETS_ROOT"] = resources.appendingPathComponent("speech-runtime-data-v1").path
+        env["HF_HUB_OFFLINE"] = "1"; env["TRANSFORMERS_OFFLINE"] = "1"
+        env["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         env["NUMBA_CACHE_DIR"] = folder.appendingPathComponent("numba-cache").path
         env["LOCAL_TRANSLATOR_STARTUP_TOKEN"] = launchID.uuidString
@@ -183,6 +199,7 @@ struct StreamingSnapshot: Decodable {
                 guard let self, self.process === child else { return }
                 self.microphone?.stop(); self.microphone = nil; self.recording = false
                 self.paused = false; self.pauseInProgress = false; self.microphoneSession = false
+                if let lease = self.runtimeLease { flock(lease, LOCK_UN); close(lease); self.runtimeLease = nil }
                 self.inputPipe = nil; self.process = nil; self.activeCommand = nil
                 self.workerStarted = false; self.busy = false; self.stopping = false
                 self.watcher?.cancel(); self.watcher = nil; self.refresh()
@@ -205,6 +222,7 @@ struct StreamingSnapshot: Decodable {
         let launchedAt = Date()
         do { try child.run() }
         catch {
+            if let lease = runtimeLease { flock(lease, LOCK_UN); close(lease); runtimeLease = nil }
             process = nil; activeCommand = nil; busy = false; try? log.close()
             try? inputPipe?.fileHandleForWriting.close(); inputPipe = nil
             self.error = error.localizedDescription
@@ -336,7 +354,7 @@ struct StreamingSnapshot: Decodable {
         guard !busy, let folder, snapshot?.asr_complete != true else { return }
         error = nil; userStopped = false
         do { try launch(["resume", "--session", folder.path],
-                        project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()) }
+                        resources: URL(fileURLWithPath: resourceRoot)) }
         catch { self.error = error.localizedDescription }
     }
 
@@ -347,7 +365,7 @@ struct StreamingSnapshot: Decodable {
             try JSONSerialization.data(withJSONObject: request).write(to: folder.appendingPathComponent("view.json"), options: .atomic)
             if !busy {
                 try launch(["page", "--session", folder.path],
-                           project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent())
+                           resources: URL(fileURLWithPath: resourceRoot))
             }
         } catch { self.error = error.localizedDescription }
     }
@@ -369,7 +387,7 @@ struct StreamingSnapshot: Decodable {
     }
     func refine(resourceRoot: String) {
         guard !busy, let original = folder, snapshot?.audio_path != nil else { return }
-        let project = URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()
+        let resources = URL(fileURLWithPath: resourceRoot)
         let configURL = original.appendingPathComponent("runtime.json")
         guard FileManager.default.fileExists(atPath: configURL.path) else {
             error = "此任务缺少运行配置，请使用新版重新处理原录音后再校对。"; return
@@ -380,7 +398,7 @@ struct StreamingSnapshot: Decodable {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
             pausePlayback(); folder = destination; snapshot = nil; error = nil; userStopped = false
             try launch(["refine", "--from-session", original.path, "--session", destination.path,
-                        "--config", configURL.path], project: project)
+                        "--config", configURL.path], resources: resources)
         } catch {
             folder = original; refresh(); self.error = error.localizedDescription
         }
@@ -389,7 +407,7 @@ struct StreamingSnapshot: Decodable {
         guard !busy, let folder else { return }
         userStopped = false; error = nil
         do { try launch(["retry", "--session", folder.path, "--retry-failed"],
-                        project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()) }
+                        resources: URL(fileURLWithPath: resourceRoot)) }
         catch { self.error = error.localizedDescription }
     }
     func revise(_ segment: StreamingSegment, text: String, resourceRoot: String) {
@@ -398,13 +416,14 @@ struct StreamingSnapshot: Decodable {
             let path = folder.appendingPathComponent("revision-\(UUID().uuidString).txt")
             try text.write(to: path, atomically: true, encoding: .utf8)
             try launch(["revise", "--session", folder.path, "--segment", String(segment.id), "--text-file", path.path],
-                       project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent())
+                       resources: URL(fileURLWithPath: resourceRoot))
         } catch { self.error = error.localizedDescription }
     }
     func play(from seconds: Double) {
-        guard let path = snapshot?.audio_path else { return }
+        guard let folder, let path = snapshot?.audio_path else { return }
         do {
-            player = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            let audio = try RuntimePaths.archivedAudio(in: folder, recordedPath: path, expectedSHA256: snapshot?.audio_sha256)
+            player = try AVAudioPlayer(contentsOf: audio)
             player?.enableRate = true; player?.rate = playbackRate; player?.currentTime = seconds
             player?.play(); isPlaying = true
             playbackWatcher?.cancel()
@@ -424,7 +443,7 @@ struct StreamingSnapshot: Decodable {
         panel.nameFieldStringValue = "双语字幕"
         guard panel.runModal() == .OK, let output = panel.url else { return }
         do { try launch(["export", "--session", folder.path, "--format", kind, "--output", output.path],
-                        project: URL(fileURLWithPath: resourceRoot).deletingLastPathComponent()) }
+                        resources: URL(fileURLWithPath: resourceRoot)) }
         catch { self.error = error.localizedDescription }
     }
     private func failure(_ message: String) -> NSError {

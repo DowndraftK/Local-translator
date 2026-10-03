@@ -49,6 +49,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     @Published var activity: String?
     @Published var error: String?
     @Published var notice = "准备就绪"
+    @Published var serviceStatus = "正在检查本机翻译服务"
     @Published var serviceAvailable = false
     @Published var serviceChecked = false
     @Published var installedModels: [String] = []
@@ -66,9 +67,19 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     @Published var lastWorkFolder: URL?
     @Published var resourceRoot: String
     let streaming = StreamingSessionController()
+    @Published var components: [RuntimeComponent] = []
+    @Published var runtimeStatus = "尚未检查语音运行环境"
+    @Published var preparingEnvironment = false
+    @Published var setupProgress = 0.0
+    @Published var setupMessage = "只准备明确选择的组件，不下载模型。"
+    var setupTask: Task<Void, Never>?
+    var setupOperation = UUID()
+    var environmentCheckOperation = UUID()
+    var environmentCheckTask: Task<Void, Never>?
     private var operation: Task<Void, Never>?
     private var serverProcess: Process?
     private var serverLog: FileHandle?
+    private var startingService = false
 
     init() {
         let arguments = CommandLine.arguments
@@ -80,8 +91,12 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
                 .appendingPathComponent("LocalTranslator/TextDocuments", isDirectory: true)
         }
         recoveryStore = TaskRecoveryStore(root: root)
-        resourceRoot = UserDefaults.standard.string(forKey: "speechResourceRoot")
-            ?? Bundle.main.object(forInfoDictionaryKey: "M0ResourceRoot") as? String ?? ""
+        if let index = arguments.firstIndex(of: "--resource-root"), index + 1 < arguments.count {
+            resourceRoot = arguments[index + 1]
+        } else {
+            resourceRoot = UserDefaults.standard.string(forKey: "speechResourceRoot")
+                ?? Bundle.main.object(forInfoDictionaryKey: "M0ResourceRoot") as? String ?? ""
+        }
         documentObservation = documentTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         textObservation = textTask.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         textTask.changed = { [weak self] in self?.scheduleRecoverySave() }
@@ -92,6 +107,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         documentTask.translator.checkpoint = { [weak self] job in try await self?.saveDocumentCheckpoint(job: job) }
         documentTask.beforeFork = { [weak self] in self?.preserveCurrentRecovery() }
         Task { await refreshSavedTasks() }
+        refreshEnvironment()
         if let index = CommandLine.arguments.firstIndex(of: "--open-recording-session"), index + 1 < CommandLine.arguments.count {
             page = .audio
             streaming.loadSession(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
@@ -130,31 +146,54 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     var tokenizerDirectory: URL {
         URL(fileURLWithPath: resourceRoot).appendingPathComponent(speechModel == "turbo" ? "whisper-tokenizer" : "whisper-tokenizer-small.en")
     }
+    var streamingResourcesPresent: Bool {
+        let root = URL(fileURLWithPath: resourceRoot)
+        return !resourceRoot.isEmpty && FileManager.default.fileExists(atPath: root.appendingPathComponent("whisper-mps-experiment/large-v3-turbo/weights.safetensors").path)
+            && FileManager.default.fileExists(atPath: root.appendingPathComponent("speech-runtime-data-v1/assets-manifest.json").path)
+    }
     var speechFilesPresent: Bool {
         !resourceRoot.isEmpty && FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("AudioEncoder.mlmodelc").path)
             && FileManager.default.fileExists(atPath: tokenizerDirectory.appendingPathComponent("tokenizer.json").path)
     }
 
+    var ollamaExecutable: String? {
+        let paths = ["/Applications/Ollama.app/Contents/Resources/ollama", NSHomeDirectory() + "/Applications/Ollama.app/Contents/Resources/ollama", "/usr/local/bin/ollama", "/opt/homebrew/bin/ollama"]
+        if let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) { return path }
+        if let component = components.first(where: { $0.id == "ollama-engine" }), let root = try? RuntimePaths.active(component) {
+            return root.appendingPathComponent(component.executable).path
+        }
+        return nil
+    }
     func checkService() async {
         guard !checkingService else { return }
         checkingService = true
         defer { checkingService = false; serviceChecked = true }
         do {
-            let models = try await OllamaEngine().models()
+            let engine = try OllamaEngine()
+            let version = try await engine.version()
+            let models = try await engine.models()
+            let readiness = OllamaReadiness.assess(version: version, tagsValid: true, portAvailable: false, executablePresent: ollamaExecutable != nil)
+            serviceStatus = readiness.message
+            guard case .ready = readiness else { serviceAvailable = false; installedModels = []; return }
             installedModels = models.filter { $0.remote_host == nil && $0.remote_model == nil && !$0.name.lowercased().contains("cloud") }.map(\.name)
             serviceAvailable = true
-        } catch { serviceAvailable = false; installedModels = [] }
+        } catch {
+            serviceAvailable = false; installedModels = []
+            serviceStatus = OllamaReadiness.assess(version: nil, tagsValid: false, portAvailable: OllamaReadiness.portAvailable(), executablePresent: ollamaExecutable != nil).message
+        }
     }
 
     func startLocalService() {
-        guard !checkingService, !serviceAvailable else { return }
+        guard !startingService, !checkingService, !serviceAvailable else { return }
+        startingService = true
         Task {
+            defer { startingService = false }
             // Check again before launching: never replace an existing server.
             await checkService()
             guard !serviceAvailable else { return }
             do {
-                let paths = ["/usr/local/bin/ollama", "/opt/homebrew/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"]
-                guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+                guard OllamaReadiness.portAvailable() else { throw M0Error.unavailable(serviceStatus) }
+                guard let path = ollamaExecutable else {
                     throw M0Error.unavailable("未找到 Ollama。请先安装或手动启动本机 Ollama。")
                 }
                 let folder = try makeWorkFolder()
@@ -170,13 +209,22 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
                 environment["OLLAMA_NOPRUNE"] = "1"
                 environment["OLLAMA_MAX_LOADED_MODELS"] = "1"
                 child.environment = environment
+                let versionCheck = Process(); let versionPipe = Pipe()
+                versionCheck.executableURL = URL(fileURLWithPath: path); versionCheck.arguments = ["--version"]
+                versionCheck.standardOutput = versionPipe; versionCheck.standardError = versionPipe
+                try versionCheck.run()
+                let deadline = Date().addingTimeInterval(3)
+                while versionCheck.isRunning && Date() < deadline { try await Task.sleep(nanoseconds: 50_000_000) }
+                if versionCheck.isRunning { versionCheck.terminate(); throw M0Error.unavailable("翻译程序版本检查超时。") }
+                let actualVersion = String(decoding: versionPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                guard actualVersion.contains("0.35.0") else { throw M0Error.unavailable("已装翻译程序不属于固定 0.35.0 组合；保留原安装，请手动处理。") }
                 child.standardOutput = handle; child.standardError = handle
                 try child.run()
                 serverProcess = child; serverLog = handle
                 checkingService = true
                 for _ in 0..<20 {
                     try await Task.sleep(nanoseconds: 250_000_000)
-                    if let models = try? await OllamaEngine().models() {
+                    if child.isRunning, (try? await OllamaEngine().version()) == "0.35.0", let models = try? await OllamaEngine().models() {
                         installedModels = models.filter { $0.remote_host == nil && $0.remote_model == nil && !$0.name.lowercased().contains("cloud") }.map(\.name)
                         serviceAvailable = true; break
                     }
@@ -184,6 +232,17 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
                 }
                 checkingService = false; serviceChecked = true
                 if !serviceAvailable { throw M0Error.unavailable("本地服务启动失败。请打开本次测试目录查看 ollama.log。") }
+                serviceStatus = "已启动本应用管理的 0.35.0 服务；保持 5 分钟自然驻留"
+                let ownership = Process(); let ownershipPipe = Pipe()
+                ownership.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+                ownership.arguments = ["-nP", "-a", "-p", String(child.processIdentifier), "-iTCP:11434", "-sTCP:LISTEN", "-Fn"]
+                ownership.standardOutput = ownershipPipe; ownership.standardError = FileHandle.nullDevice
+                try ownership.run(); ownership.waitUntilExit()
+                let listener = String(decoding: ownershipPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                guard ownership.terminationStatus == 0, listener.contains("127.0.0.1:11434"), child.isRunning else {
+                    serviceAvailable = false; if child.isRunning { child.terminate() }
+                    throw M0Error.unavailable("无法确认本应用服务的回环监听所有权，未启用推理。原服务保持。")
+                }
                 notice = "本地服务已启动，云功能已关闭"
             } catch { checkingService = false; self.error = error.localizedDescription }
         }
@@ -191,6 +250,8 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
 
     func operationForExit() { operation?.cancel() }
     func shutdown() {
+        setupTask?.cancel()
+        environmentCheckTask?.cancel()
         streaming.stop()
         streaming.pausePlayback()
         operation?.cancel()

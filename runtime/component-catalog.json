@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "components": [
+    {
+      "id": "speech-runtime",
+      "version": "0.2.10-r5",
+      "platform": "macos-arm64",
+      "archiveSHA256": "72bb28972b8262b68184d28f0b0341cef3cd26cf697240b7510b387bb1eeb4eb",
+      "archiveBytes": 335264314,
+      "installedBytes": 1186828515,
+      "manifestSHA256": "8f343c8bebf5ab0d3362638a6e51672e31e22e6c2c6fee7a6acb281143e2d3b5",
+      "downloadURL": null,
+      "allowedDownloadHosts": [],
+      "archiveRoot": "speech-runtime-0.2.10-r5",
+      "executable": "Python/bin/python3.12",
+      "selfcheck": "Code/selfcheck.py",
+      "licenseStatus": "reviewed-personal-use-only"
+    },
+    {
+      "id": "ollama-engine",
+      "version": "0.35.0",
+      "platform": "macos-arm64",
+      "archiveSHA256": "3458972dfca5b3f8a4297a8d7ff503da3e180ec9452ba8de82c69c5ba3aacdd9",
+      "archiveBytes": 198866136,
+      "installedBytes": 629347428,
+      "manifestSHA256": "d0dfe238c17c27460fbd7db79d491de5a1e0fea8af80da8d0c2627828713a441",
+      "downloadURL": "https://github.com/ollama/ollama/releases/download/v0.35.0/Ollama-darwin.zip",
+      "allowedDownloadHosts": [
+        "github.com",
+        "release-assets.githubusercontent.com",
+        "objects.githubusercontent.com"
+      ],
+      "archiveRoot": "Ollama.app",
+      "executable": "Contents/Resources/ollama",
+      "selfcheck": null,
+      "licenseStatus": "reviewed"
+    }
+  ]
+}

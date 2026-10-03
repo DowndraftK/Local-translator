@@ -29,7 +29,7 @@ import TranslatorCore
             guard options[args[i]] == nil else { throw M0Error.invalid("参数重复：\(args[i])") }
             options[args[i]] = args[i + 1]; i += 2
         }
-        let allowed: Set<String> = ["--input", "--output", "--endpoint", "--model", "--direction", "--glossary", "--mode", "--pages", "--model-folder", "--tokenizer-folder", "--resources"]
+        let allowed: Set<String> = ["--input", "--output", "--endpoint", "--model", "--direction", "--glossary", "--mode", "--pages", "--model-folder", "--tokenizer-folder", "--resources", "--catalog", "--component", "--environment-root"]
         guard Set(options.keys).isSubset(of: allowed) else { throw M0Error.invalid("包含未知参数。") }
         func required(_ key: String) throws -> String {
             guard let value = options[key], !value.isEmpty else { throw M0Error.invalid("缺少 \(key)。") }
@@ -48,6 +48,18 @@ import TranslatorCore
         }
         let endpoint = options["--endpoint"] ?? "http://127.0.0.1:11434"
         switch command {
+        case "runtime-install", "runtime-check":
+            let catalog = try JSONDecoder().decode(ComponentCatalog.self, from: Data(contentsOf: URL(fileURLWithPath: required("--catalog"))))
+            guard catalog.schema == 1, let component = catalog.components.first(where: { $0.id == options["--component"] }) else { throw M0Error.invalid("组件不在可信清单中。") }
+            let root = URL(fileURLWithPath: try required("--environment-root"))
+            if command == "runtime-install" {
+                try await RuntimeInstaller.install(component, from: options["--input"].map { URL(fileURLWithPath: $0) }, root: root, busy: { false }, report: { progress, message in
+                    if progress == 0.4 || progress == 0.75 || progress == 1 { print(message) }
+                })
+            }
+            let active = try RuntimePaths.active(component, root: root)
+            try RuntimeInstaller.validate(component, at: active)
+            print("已校验：" + active.path)
         case "doctor":
             struct Report: Encodable { var os: String; var endpoint: String; var reachable: Bool; var models: [OllamaModel]; var notes: [String] }
             let engine = try OllamaEngine(endpoint: endpoint)

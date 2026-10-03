@@ -28,9 +28,8 @@ def prepare_vad_runtime():
 def validate_resources(config):
     source = Path(config['source']).resolve()
     fingerprints = json.loads(Path(config['source_manifest']).read_text())
-    for name, expected in fingerprints['patched_files'].items():
-        if file_sha256(source / name) != expected:
-            raise ValueError(f'流式源码校验失败：{name}')
+    from .resources import validate_source_files
+    validate_source_files(source, fingerprints)
     model = Path(config['model']).resolve()
     manifest = json.loads(Path(config['model_manifest']).read_text())
     for name, expected in manifest['files'].items():
@@ -48,6 +47,8 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
     loop.set_default_executor(ThreadPoolExecutor(max_workers=1, thread_name_prefix='speech-gpu'))
     fingerprints, manifest = await asyncio.to_thread(validate_resources, config)
     sys.path.insert(0, str(Path(config['source']).resolve()))
+    from .resources import apply_asset_mapping
+    apply_asset_mapping()
     import numpy as np
     import torch
     import mlx.core as mx
@@ -101,6 +102,9 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
                  model_revision=manifest['revision'])
     store.publish()
     loaded_at = time.monotonic()
+    from whisperlivekit.simul_whisper import backend as simul_backend
+    from .lifecycle import install_encoder_lifetime_adapter
+    encoder_lifecycle = install_encoder_lifetime_adapter(simul_backend, mx)
     engine = await asyncio.to_thread(TranscriptionEngine, config=cfg)
     load_seconds = time.monotonic()-loaded_at
     sequence = store.next_sequence()
@@ -217,6 +221,7 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
     if any(p.device.type != device for p in parameters) or engine.asr.use_full_mlx:
         raise ValueError('实际 decoder 与配置不一致。')
     store.update(state='recognizing', device_evidence=evidence, load_seconds=load_seconds,
+                 encoder_lifecycle=encoder_lifecycle,
                  resources_digest=resource_fingerprint,
                  audio_path=str(audio_path.resolve()))
     store.publish()

@@ -76,6 +76,11 @@ async def refine(store, config, parent, stop):
         ThreadPoolExecutor(max_workers=1, thread_name_prefix='refinement-gpu'))
     store.update(state='loading')
     _, manifest = await asyncio.to_thread(validate_resources, config)
+    import sys
+    if config.get('source'):
+        sys.path.insert(0, str(Path(config['source']).resolve()))
+    from .resources import apply_asset_mapping
+    await asyncio.to_thread(apply_asset_mapping, 'refinement')
     source = Path(parent)/'audio.wav'
     target = store.directory/'audio.wav'
     await asyncio.to_thread(shutil.copyfile, source, target)

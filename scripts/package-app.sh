@@ -36,6 +36,8 @@ cp Vendor/argmax-oss-swift/NOTICES "$app_bundle/Contents/Resources/WhisperKit-NO
 cp Vendor/ZIPFoundation/LICENSE "$app_bundle/Contents/Resources/ZIPFoundation-LICENSE"
 mkdir -p "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator"
 cp runtime/streaming_translator/*.py "$app_bundle/Contents/Resources/StreamingRuntime/streaming_translator/"
+cp runtime/worker_bootstrap.py "$app_bundle/Contents/Resources/StreamingRuntime/"
+cp runtime/component-catalog.json "$app_bundle/Contents/Resources/component-catalog.json"
 cp artifacts/whisperlivekit-speech-repair-20261001-final/source/LICENSE "$app_bundle/Contents/Resources/WhisperLiveKit-LICENSE"
 
 export CLANG_MODULE_CACHE_PATH="$project_root/.build/clang-module-cache"
@@ -50,13 +52,13 @@ build_number=int((app.parent/'build-number.txt').read_text())
 info={
     'CFBundleName':'本地翻译器', 'CFBundleDisplayName':'本地翻译器',
     'CFBundleIdentifier':'local.kevin.translator.m0', 'CFBundleExecutable':'LocalTranslatorApp',
-    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.9', 'CFBundleVersion':str(build_number),
+    'CFBundlePackageType':'APPL', 'CFBundleShortVersionString':'0.2.10', 'CFBundleVersion':str(build_number),
     'CFBundleIconFile':'AppIcon', 'LSMinimumSystemVersion':'26.0',
     'LSApplicationCategoryType':'public.app-category.productivity',
     'NSHighResolutionCapable':True, 'NSPrincipalClass':'NSApplication',
     'NSMicrophoneUsageDescription':'在你主动开始录音时采集英语音频，在本机生成并保存双语字幕。',
     'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True},
-    'M0ResourceRoot':str(project/'models'),
+    'M0ResourceRoot':'',
 }
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(info,f)
 # This personal build keeps source evidence in the project. Resolve the copied
@@ -71,37 +73,14 @@ codesign --force --sign - "$app_bundle/Contents/MacOS/translator-m0"
 codesign --force --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 "$app_bundle/Contents/MacOS/translator-m0" --help > "$output_root/worker-check.txt"
-cat > "$output_root/使用说明.txt" <<'TXT'
-本地翻译器 — 0.2.9 个人自用正式初版候选
+cp docs/0.2.10安装与修复说明.md "$output_root/使用说明.md"
 
-双击“本地翻译器.app”打开。适用于当前 Apple Silicon Mac，要求 macOS 26 或更新。
-应用内提供：文字双向翻译、文档/图片提取及选段翻译、英语音频/视频连续转写与中文翻译。
-文字页面支持超过 8,000 字符的文章自动分段、逐段对照、完整进度、停止、复制已有译文和双语 TXT 导出。
-文字输入、完整段计划、配置与译文自动保存。点击“打开已保存任务”只读取，主动“继续未完成 / 重试失败”保留成功段，失败段每轮最多三次尝试。输入、模型或方向变化会新建任务；“重新开始”完整重译。
-录音页面提供主动麦克风输入、英文先显示、独立中文队列、保存任务、补译/失败重试、按片段回放、英文纠错和 TXT/SRT/VTT 导出。
-“录后重新校对”根据完整保存的录音生成独立新版本并翻译，保留原字幕以便比较。长录音的流式结果可能漏词，建议录后校对再复核。
-麦克风仅在点击开始并允许系统权限后采集；真人麦克风质量仍需实际验收。
-
-模型没有重复装入应用：文字翻译使用本机 Ollama 中的 HY-MT2，语音读取项目 models 文件夹。
-新任务默认采用已安装的 HY-MT2 7B 和经过有限评审的保真配置v2；可手动选择1.8B以缩短等待。旧文字/文档与字幕任务继续沿用保存配置和成功译文，打开不自动推理；明确从头重译才另建任务采用当前配置。
-本轮自编30条材料的助手语义审阅发现部分改善，但严格日期边界和中位数/平均值等仍有严重错误，未经过用户人工复核。请逐项核对条件、数字、日期、频率、统计限定和重复句；不能将正常完成或无数字警告当作准确性保证。
-若服务未运行，打开“本机资源”并点击“启动本地服务”。
-若模型移动了位置，打开“本机资源”重新选择包含 whisper-coreml 的 models 文件夹。
-流式路径另需同一项目目录中准备的 Python 环境、WhisperLiveKit 补丁源码和 MLX large-v3-turbo 权重，详见项目 runtime/README.md。
-本包可在这台 Mac 上移动使用；换到其他机器仍需另行准备 Ollama 和模型。
-
-文字/文档保存目录为 ~/Library/Application Support/LocalTranslator/TextDocuments，每任务保留 current.json、上一份有效 previous.json 及源副本。输入和编辑草稿防抖350ms，处理在每页/段持久化成功后继续；异常退出只保证已落盘内容，当前半段和未保存缓冲不保证。保存失败会停止调度并提示，正常退出等待保存；失败可返回导出或明确退出。损坏/未来格式不会静默覆盖。
-
-录音状态或数据库保存失败会停止本次工作进程；请检查错误与最后有效保存边界，再打开任务读取或导出。空间不足可能使错误本身也无法落盘，不能以旧快照的“录音中”判断工作进程仍在录音。恢复仅处理已保存音频，未写入缓冲不保证零损失。备份需复制整个已停止任务目录，保留SQLite及WAL。
-具体实体故障验收结果与未验证项以项目 docs/0.2.9实体故障与恢复验收记录.md 为准。使用与恢复办法见 docs/正式初版使用与恢复说明.md。真实课堂、复杂文档/Office、完整断网/外连审计继续保留限制。
-
-这是使用本机临时签名生成的自用测试包，未经过 Developer ID 公证或公开分发验收。
-语音保留原始时间依据，异常时间会提示核对；回放与 TXT/SRT/VTT 使用同一有效时间，导出不再累计顺延交叠。
-本版修正回退撤销识别进度、快速输入窗口跳过和终结尾词，并改善字幕起点。模型仍会错词、漏识别音乐歌词或产生异常重复，需要核对实际声音。请核对原文与录音，勿把“处理完成”等同于质量验收。
-新的录音任务保存在 ~/Library/Application Support/LocalTranslator/Recordings。可暂停/继续录音；设备变化或休眠会暂停，请手动继续。
-“仅录音，稍后识别”可先保存音频；中断任务可点击“继续识别”，从最近已保存的安全位置重做尾部。若没有检查点，会从头识别；旧尾部保存在数据库恢复记录中。
-超过 200 段的字幕可分页浏览，导出始终包含全部段落。
-文档页面支持文字型 PDF 全部页或连续范围（每轮最多 200 页）及 UTF-8 TXT 的整篇翻译、按页阅读、原 PDF 定位和完整双语 TXT 导出。默认文字层，不隐式 OCR；可主动选择整页 OCR，逐页核对、保存校正后再翻译。原始 OCR、有效原文修订及问题页均保留于完整导出。复杂排版仍需人工核对。文档原始提取/OCR、有效修订、编辑草稿、段计划及译文自动保存。源 PDF/TXT 保留指纹匹配的副本，原文件不改写；原路径移动不会混用新文件。重开后主动继续，原页可回查。旧提取/选段与原生引擎对照保留临时测试目录。
-TXT
 ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$output_root/本地翻译器-M0.zip"
+dmg_stage="$output_root/dmg-stage"
+mkdir -p "$dmg_stage"
+ditto "$app_bundle" "$dmg_stage/本地翻译器.app"
+ln -s /Applications "$dmg_stage/Applications"
+cp "$output_root/使用说明.md" "$dmg_stage/安装说明.md"
+hdiutil create -volname "本地翻译器 0.2.10" -srcfolder "$dmg_stage" -format UDZO "$output_root/本地翻译器-0.2.10.dmg" > "$output_root/dmg-create.log"
+hdiutil verify "$output_root/本地翻译器-0.2.10.dmg" > "$output_root/dmg-verify.log"
 printf '应用：%s\n压缩包：%s/本地翻译器-M0.zip\n' "$app_bundle" "$output_root"

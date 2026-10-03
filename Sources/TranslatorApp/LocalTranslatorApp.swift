@@ -25,6 +25,8 @@ import SwiftUI
         Task { @MainActor [weak self] in
             guard let self else { return }
             while self.state?.streaming.busy == true { try? await Task.sleep(nanoseconds: 100_000_000) }
+            self.state?.cancelPreparation()
+            if let preparation = self.state?.setupTask { await preparation.value }
             do {
                 try await self.state?.finishRecoveryForExit()
                 self.state?.shutdown()

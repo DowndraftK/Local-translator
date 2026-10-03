@@ -55,7 +55,7 @@ struct WorkspaceView: View {
             VStack(alignment: .leading, spacing: 9) {
                 Label(state.serviceAvailable ? "本机服务已连接" : state.serviceChecked ? "本机服务未连接" : "正在检查本机服务", systemImage: state.serviceAvailable ? "checkmark.circle.fill" : "circle.dotted")
                     .font(.system(size: 11)).foregroundStyle(state.serviceAvailable ? accent : .secondary)
-                Text("0.2.9 个人自用初版").font(.system(size: 11, weight: .medium))
+                Text("0.2.10 个人自用整合版").font(.system(size: 11, weight: .medium))
                 Text("模型与结果在本机处理\n当前功能仍需质量核对")
                     .font(.system(size: 10)).foregroundStyle(.secondary).lineSpacing(3)
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -377,7 +377,7 @@ struct ResourceWorkspace: View {
             VStack(alignment: .leading, spacing: 22) {
                 resourceCard(title: "文字翻译服务", symbol: "cpu") {
                     HStack {
-                        Label(state.serviceAvailable ? "Ollama 已连接" : "Ollama 未连接", systemImage: state.serviceAvailable ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        Label(state.serviceStatus, systemImage: state.serviceAvailable ? "checkmark.circle.fill" : "exclamationmark.circle")
                             .foregroundStyle(state.serviceAvailable ? accent : .orange)
                         Spacer()
                         if state.checkingService { ProgressView().controlSize(.small) }
@@ -390,19 +390,38 @@ struct ResourceWorkspace: View {
                     }
                     ReviewHint(text: "应用启动的服务会关闭云功能，并在退出时停止。已经运行的服务会继续保留；程序只请求本机已安装的模型。")
                 }
+                resourceCard(title: "语音运行环境", symbol: "shippingbox") {
+                    Text(state.runtimeStatus).font(.system(size: 13))
+                    ForEach(state.components.filter { $0.id == "speech-runtime" || $0.id == "ollama-engine" }, id: \.id) { component in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(component.id == "speech-runtime" ? "固定语音运行包" : "官方翻译引擎（仅缺失时准备）").font(.system(size: 12, weight: .medium))
+                            Text("下载 \(ByteCountFormatter.string(fromByteCount: Int64(component.archiveBytes), countStyle: .file)) · 安装 \(ByteCountFormatter.string(fromByteCount: Int64(component.installedBytes), countStyle: .file))").font(.system(size: 11)).foregroundStyle(.secondary)
+                            HStack {
+                                Button("下载安装 / 修复") { state.prepareComponent(component) }.disabled(component.downloadURL == nil || state.preparingEnvironment || state.busy || state.streaming.busy)
+                                Button("导入已校验运行包") { state.importComponent(component) }.disabled(state.preparingEnvironment || state.busy || state.streaming.busy)
+                            }
+                            if component.downloadURL == nil { Text("联网入口尚未发布；本地包可导入。公开托管需单独授权。").font(.system(size: 11)).foregroundStyle(.orange) }
+                        }
+                    }
+                    if state.preparingEnvironment { ProgressView(value: state.setupProgress); Button("取消准备") { state.cancelPreparation() } }
+                    Text(state.setupMessage).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Button("重新检测") { state.refreshEnvironment() }.disabled(state.preparingEnvironment)
+                    Button("回退到上一可用环境") { state.rollbackEnvironment() }.disabled(state.preparingEnvironment || state.busy || state.streaming.busy)
+                    ReviewHint(text: "只安装到本应用管理目录；完整校验与独立启动通过才切换。原可用版本、模型和任务保留，取消后重试重新下载。")
+                }
                 resourceCard(title: "Whisper 语音资源", symbol: "waveform") {
                     HStack {
-                        Label(state.speechFilesPresent ? "找到所选模型的文件" : "需要选择资源目录", systemImage: state.speechFilesPresent ? "checkmark.circle.fill" : "folder.badge.questionmark")
-                            .foregroundStyle(state.speechFilesPresent ? accent : .orange)
+                        Label(state.streamingResourcesPresent ? "找到所选模型的文件" : "需要选择资源目录", systemImage: state.streamingResourcesPresent ? "checkmark.circle.fill" : "folder.badge.questionmark")
+                            .foregroundStyle(state.streamingResourcesPresent ? accent : .orange)
                         Spacer()
                         Button("选择 models 文件夹") { state.chooseResourceRoot() }.disabled(state.busy)
                     }
                     Text(state.resourceRoot.isEmpty ? "尚未配置" : state.resourceRoot)
                         .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
-                    ReviewHint(text: "目录应包含 whisper-coreml、whisper-tokenizer 和 whisper-tokenizer-small.en。这里只检查文件位置，开始处理时会进行完整校验和实际加载。")
+                    ReviewHint(text: "流式语音需要 whisper-mps-experiment/large-v3-turbo 和 speech-runtime-data-v1，开始时校验全部文件。CoreML 与其分词资源仅供原生对照入口按需使用。")
                 }
                 resourceCard(title: "关于这个测试包", symbol: "shippingbox") {
-                    Text("本地翻译器 · 0.2.9 个人自用初版").font(.system(size: 14, weight: .medium))
+                    Text("本地翻译器 · 0.2.10 个人自用整合版").font(.system(size: 14, weight: .medium))
                     Text("适用于这台 Apple Silicon Mac，macOS 26 或更新版本。\n应用包复用本机 Ollama 和语音模型；移动应用无需复制权重，移动模型后请重新选择资源目录。")
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(5)
                     ReviewHint(text: "文字、文档和录音任务均保存在本机，可打开后主动继续。请核对期限、否定、统计限定和重复句；完成处理不代表内容正确。旧提取/选段与原生引擎对照仍使用临时目录。")
