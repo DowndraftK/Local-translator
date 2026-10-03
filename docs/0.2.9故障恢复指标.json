@@ -3,7 +3,7 @@
   "date": "2026-10-03",
   "version": "0.2.9",
   "candidate_build": 35,
-  "delivery_status": "release_ready_pending_final_push",
+  "delivery_status": "delivered",
   "baseline": {
     "baseline_version": "0.2.8",
     "baseline_build": 28,
@@ -200,7 +200,10 @@
     "branch": "codex/fault-recovery-release",
     "first_independent_commit": "5321bb0",
     "first_independent_push": "success",
-    "final_delivery_commit": "pending_final_commit"
+    "final_delivery_commit": "ad7ff7c",
+    "final_delivery_push": "success",
+    "startup_protocol_commit": "16e92b5",
+    "delivery_record": "subsequent docs-only commit; no application changes"
   },
   "final_bundle_flows": {
     "text": {
