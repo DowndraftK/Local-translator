@@ -1914,11 +1914,13 @@
     "source_tests_docs_and_compact_metrics_authorized": true,
     "binary_public_upload_authorized": false,
     "binary_assets_uploaded": false,
-    "commit_pending": true,
-    "push_pending": true,
     "main_changed": false,
     "pull_request_created": false,
-    "remote_sha_compared": false
+    "remote_sha_compared": false,
+    "content_commit": "92b8260",
+    "content_push_exit": 0,
+    "push_destination": "https://github.com/DowndraftK/Local-translator.git",
+    "delivery_registration": "the commit containing this record; its actual hash and push exit are reported in the final response and local ignored push record"
   },
   "local_hardware": {
     "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
