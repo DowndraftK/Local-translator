@@ -17,6 +17,14 @@ from .timing import map_token
 from .quality import OutputWatch
 
 
+def prepare_vad_runtime():
+    # ORT 1.30's telemetry upload thread crashed during interpreter shutdown in
+    # the physical recovery trial, after all task data had been committed.
+    # Disable it before WLK creates VAD sessions; keep the pinned ASR untouched.
+    import onnxruntime
+    onnxruntime.disable_telemetry_events()
+
+
 def validate_resources(config):
     source = Path(config['source']).resolve()
     fingerprints = json.loads(Path(config['source_manifest']).read_text())
@@ -43,6 +51,7 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
     import numpy as np
     import torch
     import mlx.core as mx
+    prepare_vad_runtime()
     from whisperlivekit.config import WhisperLiveKitConfig
     from whisperlivekit.core import TranscriptionEngine
     from whisperlivekit.audio_processor import AudioProcessor

@@ -146,6 +146,7 @@ struct StreamingSnapshot: Decodable {
             } catch {
                 guard operationID == requestID else { return }
                 self.error = error.localizedDescription; busy = false; stopping = false
+                self.status = microphone ? "录音未开始，请检查错误提示后重试" : "处理未开始，请检查错误提示后重试"
             }
         }
     }

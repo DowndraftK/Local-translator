@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "date": "2026-10-02",
+  "date": "2026-10-03",
   "version": "0.2.9",
-  "candidate_build": 33,
-  "delivery_status": "pending_physical_user_operations",
+  "candidate_build": 35,
+  "delivery_status": "release_ready_pending_final_push",
   "baseline": {
     "baseline_version": "0.2.8",
     "baseline_build": 28,
@@ -24,14 +24,14 @@
     "swift_registered": 60,
     "swift_executed_passed": 59,
     "swift_ocr_skipped": 1,
-    "python_passed": 75
+    "python_passed": 76
   },
   "package": {
     "strict_signature": true,
     "zip_matches_all_bundle_files": true,
     "runtime_python_matches_source": 14,
     "executables_match_release": true,
-    "directory": "dist/M0-20261002-233117-release"
+    "directory": "dist/M0-20261003-091726-release"
   },
   "physical_storage": {
     "volume_bytes": 33513472,
@@ -177,18 +177,12 @@
       "vtt"
     ]
   },
-  "manual_pending": [
-    "normal_short_microphone_capture_pause_continue_stop_reopen_playback",
-    "first_permission_denial",
-    "permission_revocation_and_allow",
-    "actual_computer_sleep_wake",
-    "microphone_ui_actual_disk_full"
-  ],
+  "manual_pending": [],
   "unverified": [
     {
       "scenario": "external_microphone_unplug_replug",
       "reason": "user_has_no_external_input_device",
-      "user_acceptance": "pending"
+      "user_acceptance": "accepted_explicitly_2026-10-03"
     }
   ],
   "accepted_quality_limits": [
@@ -206,7 +200,7 @@
     "branch": "codex/fault-recovery-release",
     "first_independent_commit": "5321bb0",
     "first_independent_push": "success",
-    "final_delivery_commit": "pending_physical_acceptance"
+    "final_delivery_commit": "pending_final_commit"
   },
   "final_bundle_flows": {
     "text": {
@@ -225,19 +219,35 @@
       "saved": true
     },
     "short_audio_playback_start_pause": true,
-    "native_subtitle_export": "pending_python_startup_file_read_block",
+    "native_subtitle_export": {
+      "build": 35,
+      "status": "passed_after_documents_reallow",
+      "segments": 5,
+      "bytes": 548,
+      "matches_saved_srt": true,
+      "worker_startup_ack": true,
+      "ui_success_after_exit0": true,
+      "database_integrity": "ok",
+      "audio_sha256_unchanged": true
+    },
     "command_line_subtitle_exports": [
       "txt",
       "srt",
       "vtt"
     ],
     "evidence_build": 32,
-    "startup_status_changes_in_build33": "pending_native_retest"
+    "startup_status_changes_in_build33": "native_export_passed_after_manual_unlock",
+    "native_playback_build35_real_microphone_start_pause": true,
+    "native_subtitle_export_build33": {
+      "build": 33,
+      "status": "passed",
+      "srt_matches_saved_8_segments": true,
+      "worker_startup_ack": true,
+      "ui_success_after_exit0": true
+    },
+    "evidence_inheritance": "build32 text/document unchanged; build34 capture paths unchanged; build35 affected ASR exit and native playback/export retested"
   },
-  "additional_pending": [
-    "native_python_startup_block_in_final_app",
-    "mac_unlock_for_ui_verification"
-  ],
+  "additional_pending": [],
   "physical_storage_build31": {
     "volume_bytes": 33513472,
     "actual_enospc": true,
@@ -267,13 +277,131 @@
     "ordinary_cli_json_unchanged": true,
     "automatic_regression_passed": true,
     "native_startup_timeout_seconds": 30,
-    "native_retest": "pending_unlock"
+    "native_retest": "success_and_actual_timeout_guard_passed",
+    "native_success_retest": "passed_after_manual_unlock",
+    "native_timeout_retest": "passed_actual_no_ack_30_seconds_build35",
+    "current_native_blocker": null,
+    "documents_permission": "user_reallowed_then_normal_quit_and_same_build35_reopen; native_export_passed"
   },
   "cleanup": {
     "trial_app_and_workers_stopped": true,
     "test_volume_ejected": true,
     "local_evidence_and_image_preserved": true,
     "scheduler_created": false,
-    "original_ollama_stopped": false
+    "original_ollama_stopped": false,
+    "latest_evidence_directory": "artifacts/fault-recovery-20261002/final-local-evidence35"
+  },
+  "manual_permissions": {
+    "first_denial_build": 33,
+    "system_prompt_denied": true,
+    "no_new_task_or_audio_on_denial": true,
+    "stale_request_status_found": true,
+    "failure_status_fix_build": 34,
+    "failure_status_retest": "passed_on_actual_revocation",
+    "allow_system_reopen_requested": true,
+    "isolation_arguments_restored_after_system_reopen": true,
+    "active_recording_build": 34,
+    "revocation_actual": true,
+    "revocation_effective_after_normal_quit": true,
+    "no_new_task_or_audio_on_revoked_start": true,
+    "old_saved_files_unchanged_after_revocation": true,
+    "reallow_after_revocation": "passed_actual_capture_after_normal_quit"
+  },
+  "manual_short_capture": {
+    "build": 34,
+    "task_id": "90B00D47-F301-4640-9AD3-4AB66A7F0312",
+    "pause_samples": 259200,
+    "pause_seconds": 16.2,
+    "wav_metadata_event_samples_equal": true,
+    "pause_flat_observation_seconds": 45.06,
+    "pause_added_samples": 0,
+    "sleep_continue_stop_reopen": "passed; native_playback_build35_passed",
+    "sleep": {
+      "system_sleep_local": "2026-10-03 08:44:37 +0800",
+      "system_wake_local": "2026-10-03 08:45:05 +0800",
+      "sleep_seconds": 28,
+      "interrupted_samples": 387200,
+      "wav_metadata_event_samples_equal": true,
+      "automatic_resume": false,
+      "samples_added_while_sleeping": 0,
+      "active_before_sleep_added_samples": 128000
+    },
+    "stopped_samples": 608000,
+    "stopped_seconds": 38.0,
+    "stopped_state": "recorded",
+    "stopped_wav_metadata_event_samples_equal": true,
+    "saved_sleep_prefix_preserved": true,
+    "database_integrity": "ok",
+    "wave_sha256": "8624b2dc05423a08d259e85ad2567283303002014ed27495a6f53f5e2ec5535f",
+    "native_reopen_read_only": true,
+    "native_reopen_saved_files_unchanged": true,
+    "resume35": {
+      "exit": 0,
+      "test_only_translation_start_gate": true,
+      "asr_then_translation_serial": true,
+      "audio_unchanged": true,
+      "recipe_unchanged": true,
+      "model_unchanged": true,
+      "audio_samples": 608000,
+      "asr_complete": true,
+      "state": "completed",
+      "segments": 5,
+      "translation_counts": {
+        "completed": 5
+      },
+      "recovery_history_before": 0,
+      "recovery_history_after": 1,
+      "database_integrity": "ok"
+    }
+  },
+  "manual_microphone_full": {
+    "build": 34,
+    "actual_enospc": true,
+    "volume_bytes": 33513472,
+    "last_durable_audio_samples": 1089140,
+    "last_durable_audio_seconds": 68.07125,
+    "wav_metadata_samples_equal": true,
+    "saved_prefix_preserved": true,
+    "database_integrity": "ok",
+    "ui_stopped_with_explicit_error": true,
+    "stale_recording_success_not_shown": true,
+    "filler_released": true,
+    "resume_status": "passed_serial_packaged_runtime",
+    "resume_exit": 0,
+    "asr_complete": true,
+    "confirmed_segments": 0,
+    "translation_not_exercised_without_confirmed_english": true
+  },
+  "onnx_shutdown_fault": {
+    "observed_build": 34,
+    "outer_process_exit": 139,
+    "data_committed_before_crash": true,
+    "fault_image": "onnxruntime_pybind11_state.so",
+    "fault_thread": "Microsoft::Applications::Events telemetry upload thread",
+    "fix_build": 35,
+    "fix": "disable_telemetry_events before WLK VAD sessions",
+    "sealed_asr_source_unchanged": true,
+    "recognition_configuration_unchanged": true,
+    "new_real_cpu_vad_subprocess_regression": true,
+    "serial_real_audio_retest_outer_exit": 0,
+    "successful_original_rows_unchanged": true
+  },
+  "final_build": 35,
+  "save_boundary": {
+    "normal_microphone_samples": 608000,
+    "normal_microphone_seconds": 38,
+    "full_microphone_samples": 1089140,
+    "full_microphone_seconds": 68.07125,
+    "native_queue_max_copied_buffers": 24,
+    "runtime_max_block_samples": 8000,
+    "reliable_total_unflushed_seconds_upper_bound": null,
+    "unmeasured_inflight": [
+      "current tap/converter",
+      "copied buffer lengths",
+      "pipe backlog"
+    ],
+    "text_ocr_debounce_ms": 350,
+    "debounce_resets_during_continuous_edits": true,
+    "zero_buffer_loss_promised": false
   }
 }
