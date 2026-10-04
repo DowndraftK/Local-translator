@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <Python.h>
 
 #ifndef B01_PYTHON_PATH
 #error "Build with the explicit isolated B01 interpreter path."
@@ -21,8 +22,10 @@ int main(int argc, char **argv) {
     arguments[0] = B01_PYTHON_PATH;
     arguments[1] = "-I"; arguments[2] = "-B"; arguments[3] = script;
     for (int i = 1; i < argc; ++i) arguments[i + 3] = argv[i];
-    execv(B01_PYTHON_PATH, arguments);
-    perror("B01 isolated interpreter could not start");
+    // Keep the signed .app executable as the process's native executable so
+    // NSBundle/LaunchServices/AX retain the preview's own desktop identity.
+    // Python still uses the explicit isolated development venv as argv[0].
+    int result = Py_BytesMain(argc + 3, arguments);
     free(arguments);
-    return 2;
+    return result;
 }

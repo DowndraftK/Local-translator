@@ -9,6 +9,7 @@ import py_compile
 import shutil
 import subprocess
 import sys
+import sysconfig
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -92,7 +93,9 @@ def main():
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         executable = app / "Contents/MacOS/B01Preview"
         subprocess.run(["clang", "-Os", "-arch", "arm64", '-DB01_PYTHON_PATH=' + json.dumps(sys.executable),
-                        str(source / "native/mac_launcher.c"), "-o", str(executable)], check=True)
+                        "-I", sysconfig.get_path("include"), str(source / "native/mac_launcher.c"),
+                        str(Path(sys.base_prefix) / "lib/libpython3.12.dylib"),
+                        "-Wl,-rpath," + str(Path(sys.base_prefix) / "lib"), "-o", str(executable)], check=True)
         subprocess.run(["codesign", "--sign", "-", str(app)], check=True)
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     else:
