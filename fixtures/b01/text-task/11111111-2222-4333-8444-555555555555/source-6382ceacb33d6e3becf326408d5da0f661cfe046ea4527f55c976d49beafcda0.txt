@@ -1,0 +1,3 @@
+Repeat this sentence. Repeat this sentence.
+中文 / C:\synthetic\source.txt
+END-B01

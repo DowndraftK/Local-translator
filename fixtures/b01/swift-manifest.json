@@ -1,0 +1,21 @@
+{
+  "files" : {
+    "swift-recipe-v1-en-zh.json" : "f09724ccc5643c119b4077b0a8754f51f557d5fa93b49216ccb726b8ba5ddc89",
+    "swift-recipe-v1-zh-en.json" : "8a4816332bbe42050e8ae80d294abf94ce68058082a3f9c38787ab79695ef101",
+    "swift-recipe-v2-en-zh.json" : "c19bbf5bbe70bd67b17b65ae6457f7d1bf16ddec7a1c9ea1f64961bc5c907edc",
+    "swift-recipe-v2-zh-en.json" : "15d88113f8749588265239a049f254629f663e03c01decaba9ad9e96af4eff2c",
+    "text-task/11111111-2222-4333-8444-555555555555/current.json" : "d7befd225c1ed4e4f0b6479f748bde6906b8946d2876967c6dc08b237d6e5696",
+    "text-task/11111111-2222-4333-8444-555555555555/previous.json" : "eb4dd957a57d061b096f01947afbe3940e716c8e3d599e7e74f065cc9005f9ed",
+    "text-task/11111111-2222-4333-8444-555555555555/source-6382ceacb33d6e3becf326408d5da0f661cfe046ea4527f55c976d49beafcda0.txt" : "6382ceacb33d6e3becf326408d5da0f661cfe046ea4527f55c976d49beafcda0"
+  },
+  "origin" : "production Swift JSONOutput / TaskRecoveryStore; self-authored fixture",
+  "recipe_bindings" : {
+    "swift-recipe-v1-en-zh.json" : "f09724ccc5643c119b4077b0a8754f51f557d5fa93b49216ccb726b8ba5ddc89",
+    "swift-recipe-v1-zh-en.json" : "8a4816332bbe42050e8ae80d294abf94ce68058082a3f9c38787ab79695ef101",
+    "swift-recipe-v2-en-zh.json" : "c19bbf5bbe70bd67b17b65ae6457f7d1bf16ddec7a1c9ea1f64961bc5c907edc",
+    "swift-recipe-v2-zh-en.json" : "15d88113f8749588265239a049f254629f663e03c01decaba9ad9e96af4eff2c"
+  },
+  "schema" : 1,
+  "swift_binding_dialect" : "foundation-pretty-sorted-unescaped-slashes-v1",
+  "task_id" : "11111111-2222-4333-8444-555555555555"
+}

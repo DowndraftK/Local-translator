@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "scope": "B01 isolated development environment; not a distributable runtime",
+  "python": {"version": "3.12.14", "mac_existing_build": "20260825", "windows_verified": false},
+  "qt": "6.8.3",
+  "packages": [
+    {
+      "name": "PySide6-Essentials", "version": "6.8.3",
+      "license_metadata": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "metadata_source": "https://pypi.org/pypi/PySide6-Essentials/6.8.3/json",
+      "wheels": {
+        "darwin": {"filename": "PySide6_Essentials-6.8.3-cp39-abi3-macosx_12_0_universal2.whl", "bytes": 134189733, "sha256": "aa56c135db924ecfaf50088baf32f737d28027419ca5fee67c0c7141b29184e3", "url": "https://files.pythonhosted.org/packages/ad/74/082381f996baea3d6716d542c2184cb031e63f1cb6d4edca871fe82dd787/PySide6_Essentials-6.8.3-cp39-abi3-macosx_12_0_universal2.whl"},
+        "win32": {"filename": "PySide6_Essentials-6.8.3-cp39-abi3-win_amd64.whl", "bytes": 72191029, "sha256": "3c0fae5550aff69f2166f46476c36e0ef56ce73d84829eac4559770b0c034b07", "url": "https://files.pythonhosted.org/packages/8e/0f/5d8c6da7586e57ee032643e0c0e62335ef1a1add1a980160ddd1654f1d8d/PySide6_Essentials-6.8.3-cp39-abi3-win_amd64.whl"}
+      }
+    },
+    {
+      "name": "shiboken6", "version": "6.8.3",
+      "license_metadata": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "metadata_source": "https://pypi.org/pypi/shiboken6/6.8.3/json",
+      "wheels": {
+        "darwin": {"filename": "shiboken6-6.8.3-cp39-abi3-macosx_12_0_universal2.whl", "bytes": 402402, "sha256": "483efc7dd53c69147b8a8ade71f7619c79ffc683efcb1dc4f4cb6c40bb23d29b", "url": "https://files.pythonhosted.org/packages/e5/89/162c763f2799786e16f9045aa599dcf126e0f5f6a517f1e0251ba0be17e6/shiboken6-6.8.3-cp39-abi3-macosx_12_0_universal2.whl"},
+        "win32": {"filename": "shiboken6-6.8.3-cp39-abi3-win_amd64.whl", "bytes": 1150998, "sha256": "bca3a94513ce9242f7d4bbdca902072a1631888e0aa3a8711a52cc5dbe93588f", "url": "https://files.pythonhosted.org/packages/aa/29/e77f3fba5337f2d98f977eece0fd24cda6cf7d83be2699514d2ca1d34f6c/shiboken6-6.8.3-cp39-abi3-win_amd64.whl"}
+      }
+    }
+  ],
+  "excluded": ["PySide6-Addons", "QtWebEngine", "torch", "mlx", "CUDA", "OCR", "models"],
+  "distribution_status": "development-only; actual Qt modules/plugins and corresponding sources/relink obligations require B10 review"
+}
