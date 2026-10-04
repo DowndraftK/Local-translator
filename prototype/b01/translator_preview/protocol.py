@@ -2,11 +2,13 @@
 import json
 import uuid
 
-PROTOCOL = {"major": 1, "minor": 0}
+PROTOCOL = {"major": 1, "minor": 1}
 MAX_FRAME_BYTES = 65536
 STARTUP_TIMEOUT_MS = 30000
 SHUTDOWN_TIMEOUT_MS = 5000
 MAX_STEPS = 40
+SNAPSHOT_CHUNK_BYTES = 16384
+MAX_TRANSFER_BYTES = 32 * 1024 * 1024
 
 
 class ProtocolError(ValueError):

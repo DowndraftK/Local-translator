@@ -60,42 +60,59 @@ def main():
         mac_build = max(existing) + 1
         (output / "build-number.txt").write_text(f"{mac_build}\n")
         build_id = f"macos-arm64-build{mac_build}"
-        app = output / "本地翻译器 B01预览.app"
+        app = output / "本地翻译器 B02预览.app"
         package = app / "Contents/Resources/B01"
         (app / "Contents/MacOS").mkdir(parents=True)
     else:
         if platform.machine().lower() not in ("amd64", "x86_64"):
             parser.error("Requires Windows x64.")
         # Windows identity is independent of the historical Mac build sequence.
-        build_id = "windows-x64-b01-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        build_id = "windows-x64-b02-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         package = output / "B01"
     shutil.copytree(source, package, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    files = sorted(p for p in source.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": "b01-preview.1",
+    shutil.copytree(project / "shared", package / "shared", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    assets = package / "shared/translator_core/assets"; assets.mkdir()
+    for recipe in (project / "fixtures/b01").glob("swift-recipe-*.json"):
+        shutil.copy2(recipe, assets / recipe.name)
+    if sys.platform == "darwin":
+        helper = package / "shared/platform/macos/text-boundaries"
+        subprocess.run(["swiftc", "-O", "-module-cache-path", str(output / "module-cache"),
+                        str(project / "shared/platform/macos/TextBoundaries.swift"), "-o",
+                        str(helper)], check=True)
+        subprocess.run(["codesign", "--sign", "-", str(helper)], check=True)
+    files = sorted(p for root in (source, project / "shared") for p in root.rglob("*")
+                   if p.is_file() and "__pycache__" not in p.parts)
+    files += sorted((project / "fixtures/b01").glob("swift-recipe-*.json"))
+    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": "b02-preview.1",
         "build_id": build_id, "mac_build": mac_build,
         "native_platform": sys.platform, "machine": platform.machine(),
         "built_at": datetime.now(timezone.utc).isoformat(), "branch": branch,
         "source_commit": run("git", "-C", project, "rev-parse", "HEAD"),
         "working_tree_modified": bool(run("git", "-C", project, "status", "--porcelain")),
-        "source_files": {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
+        "source_files": {str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
         "python_version": platform.python_version(), "python_executable": sys.executable,
-        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 0},
+        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 1}, "shared_core": "b02-text.1",
+        "preview_task_root": str(project / "artifacts/b02-20261004/tasks"),
         "dependency_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "dependencies": {item["name"]: item["version"] for item in lock["packages"]},
         "standalone_runtime": False, "distribution": "local-development-preview-only"}
+    if sys.platform == "darwin":
+        identity["platform_adapter"] = {"name": "Foundation-Character-NaturalLanguage-boundaries-v1",
+                                       "binary_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),
+                                       "compiler": run("swiftc", "--version")}
     (package / "build-identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     for path in package.rglob("*.py"):
         target = output / "compile-check" / path.relative_to(package).with_suffix(".pyc")
         target.parent.mkdir(parents=True, exist_ok=True)
         py_compile.compile(str(path), cfile=str(target), doraise=True)
     if sys.platform == "darwin":
-        info = {"CFBundleIdentifier": "local.kevin.translator.b01", "CFBundleName": "本地翻译器 B01预览",
-            "CFBundleDisplayName": "本地翻译器 B01预览", "CFBundleExecutable": "B01Preview",
+        info = {"CFBundleIdentifier": "local.kevin.translator.b02", "CFBundleName": "本地翻译器 B02预览",
+            "CFBundleDisplayName": "本地翻译器 B02预览", "CFBundleExecutable": "B02Preview",
             "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.2.11",
             "CFBundleVersion": str(mac_build), "LSMinimumSystemVersion": "26.0",
             "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication"}
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
-        executable = app / "Contents/MacOS/B01Preview"
+        executable = app / "Contents/MacOS/B02Preview"
         subprocess.run(["clang", "-Os", "-arch", "arm64", '-DB01_PYTHON_PATH=' + json.dumps(sys.executable),
                         "-I", sysconfig.get_path("include"), str(source / "native/mac_launcher.c"),
                         str(Path(sys.base_prefix) / "lib/libpython3.12.dylib"),
@@ -106,7 +123,7 @@ def main():
         # No installer or claimed independent EXE in B01: native Python/Qt bytecode
         # build plus an explicit local interpreter launcher for desktop verification.
         launcher = f'@echo off\r\n"{sys.executable}" -I -B "%~dp0B01\\launch.py" %*\r\n'
-        (output / "Launch-B01.cmd").write_text(launcher, encoding="utf-8")
+        (output / "Launch-B02.cmd").write_text(launcher, encoding="utf-8")
     (output / "candidate.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"build_id": build_id, "output": str(output), "source_files": len(files)}, ensure_ascii=False))
 

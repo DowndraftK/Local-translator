@@ -74,7 +74,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(d["isolated_python"] and d["bytecode_disabled"])
         self.assertEqual(d["worker_pid"], self.peer.process.pid)
         self.assertFalse(d["models_loaded"] or d["production_tasks_opened"] or d["gpu_verified"])
-        self.assertEqual(d["capabilities"]["text_translation"], "not_implemented_b02")
+        self.assertEqual(d["capabilities"]["text_translation"], "requires_verified_platform_adapter")
         self.peer.send("diagnose"); self.assertEqual(self.peer.next("diagnostics")["diagnostics"], d)
 
     def test_handshake_required(self):

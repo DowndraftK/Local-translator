@@ -16,9 +16,10 @@ from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QListW
 
 from . import PRODUCT_VERSION, PREVIEW_ID
 from .client import WorkerClient
+from .text_page import TextPage
 
 LABELS = {"connecting": "正在等待本地工作进程确认启动…", "ready": "本地工作进程已就绪",
-          "running": "正在执行无模型验证", "cancelling": "正在安全取消，等待尾部确认…",
+          "running": "正在执行本次操作", "cancelling": "正在安全取消，等待尾部确认…",
           "closing": "正在安全结束本地工作进程…", "failed": "本地验证失败，请查看诊断",
           "disconnected": "本地工作进程已停止"}
 FEATURES = [("diagnostics", "能力与诊断", "B01"), ("lifecycle_probe", "启动 / 进度 / 安全取消", "B01"),
@@ -30,7 +31,7 @@ FEATURES = [("diagnostics", "能力与诊断", "B01"), ("lifecycle_probe", "启�
 
 
 class PreviewWindow(QMainWindow):
-    def __init__(self, evidence_path=None, screenshot_path=None):
+    def __init__(self, evidence_path=None, screenshot_path=None, task_root=None, boundary_helper=None):
         super().__init__()
         self.evidence_path, self.screenshot_path = evidence_path, screenshot_path
         self.started_monotonic = time.monotonic()
@@ -45,26 +46,34 @@ class PreviewWindow(QMainWindow):
             "runtime": {"python_executable": sys.executable, "python_prefix": sys.prefix,
                 "pyside6_module": PySide6.__file__, "qt_plugin_paths": QCoreApplication.libraryPaths()}}
         self.close_pending = False
-        self.setWindowTitle("本地翻译器 · B01 共享界面预览")
+        package = Path(__file__).resolve().parents[1]
+        project = package.parents[1]
+        task_root = Path(task_root or self.identity.get("preview_task_root") or project / "artifacts/b02-20261004/tasks")
+        boundary_helper = Path(boundary_helper or package / "shared/platform/macos/text-boundaries")
+        if not boundary_helper.is_file() and sys.platform == "darwin":
+            boundary_helper = project / "artifacts/b02-20261004/bin/text-boundaries"
+        self.client = WorkerClient(self, task_root=task_root, boundary_helper=boundary_helper)
+        self.evidence["preview_task_root"] = str(task_root)
+        self.setWindowTitle("本地翻译器 · B02 文字预览")
         self.resize(1100, 760); self.setMinimumSize(860, 600)
         root = QWidget(); self.setCentralWidget(root)
         layout = QHBoxLayout(root); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
         sidebar = QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(245)
         side = QVBoxLayout(sidebar); side.setContentsMargins(24, 30, 20, 24)
         brand = QLabel("本地翻译器"); brand.setObjectName("brand"); side.addWidget(brand)
-        small = QLabel("共享桌面界面 · B01"); small.setObjectName("muted"); side.addWidget(small)
+        small = QLabel("共享桌面界面 · B02"); small.setObjectName("muted"); side.addWidget(small)
         self.nav = QListWidget(); self.nav.setObjectName("navigation")
         self.nav.addItems(["连接与能力", "文字翻译", "文档与图片", "录音与字幕", "资源与安装"])
         side.addWidget(self.nav); side.addStretch()
-        foot = QLabel("0.2.11 · 架构预览\n仅实施 B01\n旧 Mac 应用独立保留")
+        foot = QLabel("0.2.11 · 文字预览\n本次实施 B02\n旧 Mac 应用独立保留")
         foot.setWordWrap(True); foot.setObjectName("muted"); side.addWidget(foot)
         layout.addWidget(sidebar)
         main = QVBoxLayout(); main.setContentsMargins(30, 28, 30, 24); main.setSpacing(14)
         layout.addLayout(main)
         title = QLabel("连接与能力"); title.setObjectName("title"); main.addWidget(title)
-        note = QLabel("验证共享窗口与本地工作进程。当前预览尚未接入翻译、文档或语音业务。")
+        note = QLabel("文字页已接入保存、主动翻译和恢复。预览任务与旧 Mac 应用独立保存。")
         note.setWordWrap(True); note.setObjectName("muted"); main.addWidget(note)
-        identity = QLabel(f"候选 {self.identity['build_id']}  ·  协议 1.0  ·  {platform.system()} / {platform.machine()}")
+        identity = QLabel(f"候选 {self.identity['build_id']}  ·  协议 1.1  ·  {platform.system()} / {platform.machine()}")
         identity.setObjectName("muted"); main.addWidget(identity)
         self.stack = QStackedWidget(); main.addWidget(self.stack, 1)
         page = QWidget(); box = QVBoxLayout(page); box.setContentsMargins(0, 0, 0, 0); box.setSpacing(12)
@@ -94,17 +103,17 @@ class PreviewWindow(QMainWindow):
         self.timeline.setPlaceholderText("启动与取消记录将在这里显示。")
         self.timeline.document().setMaximumBlockCount(80); box.addWidget(self.timeline)
         self.stack.addWidget(page)
-        for label, batch in [("文字翻译", "B02"), ("文档与图片", "B03 / B04"),
+        self.text_page = TextPage(self.client, task_root, self); self.stack.addWidget(self.text_page)
+        for label, batch in [("文档与图片", "B03 / B04"),
                              ("录音与字幕", "B05—B07"), ("资源与安装", "B08—B11")]:
             placeholder = QWidget(); column = QVBoxLayout(placeholder)
             column.addStretch(); heading = QLabel(label); heading.setObjectName("title"); heading.setAlignment(Qt.AlignCenter)
             column.addWidget(heading)
-            text = QLabel(f"尚未接入 · {batch}\n本次只验证共享界面与启动 / 取消。\n已有任务请继续使用旧 Mac 应用。")
+            text = QLabel(f"尚未接入 · {batch}\n已有文档和语音任务请继续使用旧 Mac 应用。")
             text.setAlignment(Qt.AlignCenter); text.setObjectName("muted"); column.addWidget(text); column.addStretch()
             self.stack.addWidget(placeholder)
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.currentTextChanged.connect(title.setText); self.nav.setCurrentRow(0)
-        self.client = WorkerClient(self)
         self.client.changed.connect(self.state_changed)
         self.client.event.connect(self.on_event); self.client.stopped.connect(self.on_stopped)
         self.start_button.clicked.connect(self.start_probe); self.cancel_button.clicked.connect(self.client.cancel)
@@ -134,7 +143,9 @@ class PreviewWindow(QMainWindow):
         self.client.start_probe(steps=40, interval_ms=250, lease_ms=20000)
 
     def on_event(self, event):
-        self.evidence["events"].append(dict(event, received_elapsed_seconds=round(time.monotonic() - self.started_monotonic, 6)))
+        compact = dict(event)
+        if "data" in compact: compact["data"] = "[bounded snapshot chunk; content not logged]"
+        self.evidence["events"].append(dict(compact, received_elapsed_seconds=round(time.monotonic() - self.started_monotonic, 6)))
         self.evidence["events"] = self.evidence["events"][-256:]
         kind = event["type"]
         if kind == "ready":
@@ -149,9 +160,13 @@ class PreviewWindow(QMainWindow):
         elif kind == "cancel.accepted":
             self.timeline.appendPlainText("已接受取消，等待确认尾部。")
         elif kind == "operation.finished":
-            count = len(event["result"]["confirmed_steps"])
-            status = "已安全取消" if event["status"] == "cancelled" else "验证完成" if event["status"] == "completed" else "租约已到期"
-            self.timeline.appendPlainText(f"{status} · 保留 {count} 个已确认步骤 · 尾部已排空。")
+            if event["result"]["kind"] == "synthetic-lifecycle-probe":
+                count = len(event["result"]["confirmed_steps"])
+                status = "已安全取消" if event["status"] == "cancelled" else "验证完成" if event["status"] == "completed" else "租约已到期"
+                self.timeline.appendPlainText(f"{status} · 保留 {count} 个已确认步骤 · 尾部已排空。")
+            else:
+                self.timeline.appendPlainText("本次文字/服务操作已排空：" + event["status"])
+                if event["result"]["kind"] == "text-task": self.evidence["inference"] = True
             if self.screenshot_path:
                 QTimer.singleShot(200, self.capture_window)
         elif kind == "shutdown.confirmed":
@@ -206,13 +221,15 @@ QProgressBar::chunk { background: #a5d6be; }
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="B01 shared UI development preview")
+    parser = argparse.ArgumentParser(description="B02 shared text development preview")
     parser.add_argument("--evidence")
     parser.add_argument("--screenshot")
+    parser.add_argument("--task-root")
+    parser.add_argument("--boundary-helper")
     args = parser.parse_args(argv)
-    app = QApplication([]); app.setApplicationName("本地翻译器 B01预览")
+    app = QApplication([]); app.setApplicationName("本地翻译器 B02预览")
     app.setStyle("Fusion"); app.setStyleSheet(STYLE)
-    window = PreviewWindow(args.evidence, args.screenshot); window.show()
+    window = PreviewWindow(args.evidence, args.screenshot, args.task_root, args.boundary_helper); window.show()
     code = app.exec()
     # Destroy the widget/AX tree while QApplication and its native accessibility
     # bridge still exist, rather than during Python interpreter finalization.

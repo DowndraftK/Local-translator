@@ -1,0 +1,226 @@
+"""Schema1 durable snapshots in an explicitly separate, single-writer preview root."""
+import os
+import shutil
+import sys
+import threading
+import uuid
+from copy import deepcopy
+from pathlib import Path
+
+from . import CoreError
+from .contracts import (MAX_INPUT_BYTES, MAX_SNAPSHOT_BYTES, decode_snapshot,
+                        encode_snapshot, sha, task_id)
+
+MARKER = b"LocalTranslator B02 isolated text store v1\n"
+
+
+def safe_file(path, limit=MAX_SNAPSHOT_BYTES * 2):
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise CoreError("文件缺失或为符号链接，原数据保留。", "unsafe_path")
+    with path.open("rb") as handle:
+        data = handle.read(limit + 1)
+    if len(data) > limit:
+        raise CoreError("文件超过此预览的容量上限。")
+    return data
+
+
+def atomic_write(data, path):
+    path = Path(path)
+    if path.is_symlink():
+        raise CoreError("拒绝替换符号链接。", "unsafe_path")
+    temp = path.with_name(".write-" + uuid.uuid4().hex)
+    descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data); handle.flush(); os.fsync(handle.fileno())
+        os.replace(temp, path)
+        if sys.platform != "win32":
+            directory = os.open(path.parent, os.O_RDONLY)
+            try: os.fsync(directory)
+            finally: os.close(directory)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+class TaskStore:
+    def __init__(self, root, write=atomic_write):
+        self.root = Path(root).absolute()
+        self.write = write
+        self.high_water = {}
+        self.mutex = threading.RLock()
+        if self.root.is_symlink():
+            raise CoreError("预览任务根不能是符号链接。", "unsafe_path")
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        marker = self.root / ".b02-preview-store"
+        if not marker.exists():
+            if any(self.root.iterdir()):
+                raise CoreError("请选择新的空预览目录，不能直接接管旧任务目录。", "root_not_isolated")
+            atomic_write(MARKER, marker)
+        if safe_file(marker, 200) != MARKER:
+            raise CoreError("预览目录身份不匹配。", "root_not_isolated")
+        lock_path = self.root / ".writer.lock"
+        if lock_path.is_symlink():
+            raise CoreError("任务锁路径无效。", "unsafe_path")
+        self.lock = lock_path.open("a+b")
+        try:
+            if sys.platform == "win32":
+                # Native Windows compatibility is deliberately still unverified.
+                import msvcrt
+                self.lock.seek(0); self.lock.write(b"0"); self.lock.flush(); self.lock.seek(0)
+                msvcrt.locking(self.lock.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            self.lock.close()
+            raise CoreError("另一预览正在写此目录，请先安全关闭。", "writer_busy") from exc
+        for name in ("incoming", "exports"):
+            folder = self.root / name
+            if folder.is_symlink():
+                self.close(); raise CoreError("预览目录包含不安全路径。", "unsafe_path")
+            folder.mkdir(exist_ok=True, mode=0o700)
+
+    def close(self):
+        if getattr(self, "lock", None) and not self.lock.closed:
+            self.lock.close()
+
+    def directory(self, identity):
+        result = self.root / task_id(identity)
+        if result.is_symlink():
+            raise CoreError("任务目录不能是符号链接。", "unsafe_path")
+        return result
+
+    @staticmethod
+    def asset_name(task):
+        asset = task.get("asset")
+        if asset is None:
+            return None
+        if not isinstance(asset, dict):
+            raise CoreError("源副本字段无效。")
+        name = asset.get("filename")
+        if (not isinstance(name, str) or not name or name in (".", "..") or
+                any(c in name for c in ("/", "\\", ":", "\0")) or
+                name in ("current.json", "previous.json") or name.startswith(".")):
+            raise CoreError("源副本路径无效。", "unsafe_path")
+        return name
+
+    @classmethod
+    def verify_asset(cls, task, directory):
+        name = cls.asset_name(task)
+        if name is None:
+            return None
+        data = safe_file(Path(directory) / name, MAX_INPUT_BYTES)
+        asset = task["asset"]
+        if type(asset.get("byteCount")) is not int or len(data) != asset["byteCount"] or sha(data) != asset.get("fingerprint"):
+            raise CoreError("封存源副本不匹配；仍可阅读/导出，禁止继续。", "source_mismatch")
+        return data
+
+    @staticmethod
+    def read_directory(directory, identity):
+        directory = Path(directory)
+        try:
+            task = decode_snapshot(safe_file(directory / "current.json"))
+        except CoreError as exc:
+            if exc.code in ("future_schema", "unsafe_path") and (directory / "current.json").exists():
+                raise
+            try:
+                task = decode_snapshot(safe_file(directory / "previous.json"))
+            except CoreError:
+                raise exc
+            if task_id(task["id"]) != task_id(identity):
+                raise CoreError("保存目录与任务身份不匹配。")
+            return task, "最新快照损坏；已只读打开上一份有效快照。原文件保留，请导出后另建任务。"
+        if task_id(task["id"]) != task_id(identity):
+            raise CoreError("保存目录与任务身份不匹配。")
+        return task, None
+
+    def read(self, identity):
+        with self.mutex:
+            task, warning = self.read_directory(self.directory(identity), identity)
+            self.high_water[task_id(identity)] = max(task["revision"], self.high_water.get(task_id(identity), 0))
+            try: self.verify_asset(task, self.directory(identity))
+            except CoreError as exc: warning = (warning + "\n" if warning else "") + str(exc)
+            return deepcopy(task), warning
+
+    def list(self):
+        tasks, errors = [], []
+        for path in self.root.iterdir():
+            try: identity = task_id(path.name)
+            except CoreError: continue
+            try:
+                task, warning = self.read(identity)
+                tasks.append({"id": identity, "name": task["name"], "updated": task["updated"],
+                              "phase": (task.get("text") or {}).get("phase", "draft"), "warning": warning})
+            except CoreError as exc: errors.append(f"{identity}：{exc}")
+        return sorted(tasks, key=lambda item: item["updated"], reverse=True), errors
+
+    def save(self, task, asset_data=None):
+        encoded = encode_snapshot(task)
+        identity = task_id(task["id"])
+        with self.mutex:
+            directory = self.directory(identity); current = directory / "current.json"
+            existing = None
+            if current.exists() or current.is_symlink():
+                existing = safe_file(current); previous = decode_snapshot(existing)
+                if task_id(previous["id"]) != identity:
+                    raise CoreError("任务目录身份不匹配。")
+                self.high_water[identity] = max(previous["revision"], self.high_water.get(identity, 0))
+            if task["revision"] <= self.high_water.get(identity, 0):
+                return False
+            directory.mkdir(exist_ok=True, mode=0o700)
+            name = self.asset_name(task)
+            if name:
+                asset = directory / name
+                if not asset.exists() and not asset.is_symlink():
+                    metadata = task["asset"]
+                    if asset_data is None or len(asset_data) != metadata["byteCount"] or sha(asset_data) != metadata["fingerprint"]:
+                        raise CoreError("缺少匹配的封存源副本。", "source_mismatch")
+                    self.write(asset_data, asset)
+                self.verify_asset(task, directory)
+            if existing is not None:
+                self.write(existing, directory / "previous.json")
+            self.write(encoded, current)
+            self.high_water[identity] = task["revision"]
+            return True
+
+    def import_copy(self, source):
+        """Explicit read-only source selection, preserving exact original snapshot bytes."""
+        source = Path(source).absolute()
+        if source.is_symlink() or not source.is_dir():
+            raise CoreError("请选择实际任务目录，不能选择符号链接。", "unsafe_path")
+        identity = task_id(source.name)
+        task, warning = self.read_directory(source, identity)
+        # Do not quietly repair or replace a corrupt source. A read-only import can
+        # retain it alongside previous; it remains blocked for continuation.
+        asset_data = self.verify_asset(task, source)
+        with self.mutex:
+            target = self.directory(identity)
+            if target.exists():
+                raise CoreError("此UUID已在预览目录中，未覆盖既有任务。", "task_exists")
+            temp = self.root / (".import-" + uuid.uuid4().hex)
+            temp.mkdir(mode=0o700)
+            try:
+                for name in ("current.json", "previous.json"):
+                    if (source / name).exists():
+                        atomic_write(safe_file(source / name), temp / name)
+                if asset_data is not None:
+                    atomic_write(asset_data, temp / self.asset_name(task))
+                os.rename(temp, target)
+            finally:
+                if temp.exists(): shutil.rmtree(temp)
+        return task, warning
+
+    def incoming(self, name, fingerprint, count):
+        if (not isinstance(name, str) or len(name) != 36 or not name.endswith(".txt") or
+                any(c not in "0123456789abcdef" for c in name[:-4]) or
+                type(count) is not int or not 0 < count <= MAX_INPUT_BYTES):
+            raise CoreError("输入暂存身份无效。", "unsafe_path")
+        path = self.root / "incoming" / name
+        data = safe_file(path, MAX_INPUT_BYTES)
+        if len(data) != count or sha(data) != fingerprint:
+            raise CoreError("输入暂存内容不匹配。", "source_mismatch")
+        try: text = data.decode("utf-8")
+        except UnicodeError as exc: raise CoreError("输入不是UTF-8文字。") from exc
+        path.unlink()
+        return text

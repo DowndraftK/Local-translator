@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "origin": "production Swift frozen splits and Python shared schema1; self-authored only",
+  "files": {
+    "swift-splits.json": "ad06ebd72d67df858dd5ac6ed7f4c094873af07c946dbe7fb75d844a85e23339",
+    "shared-task/22222222-3333-4444-8555-666666666666/source-371ea8cd5325f05081016d56fc8d0c1fa903a90451e2589b7d74f61a04de9920.txt": "371ea8cd5325f05081016d56fc8d0c1fa903a90451e2589b7d74f61a04de9920",
+    "shared-task/22222222-3333-4444-8555-666666666666/current.json": "a3d3c6dcc495ef528a13eb7a4b2c65a5a5df16374eb5e2efdc9096fbd470839a",
+    "shared-task/11111111-2222-4333-8444-555555555555/current.json": "30041ba511dd7915bf947b3cc0832988f2a011b939d8cad10673e4b109b5d969",
+    "shared-task/11111111-2222-4333-8444-555555555555/source-6382ceacb33d6e3becf326408d5da0f661cfe046ea4527f55c976d49beafcda0.txt": "6382ceacb33d6e3becf326408d5da0f661cfe046ea4527f55c976d49beafcda0"
+  }
+}
