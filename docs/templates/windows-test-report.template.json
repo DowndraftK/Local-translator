@@ -1,0 +1,72 @@
+{
+  "template_version": 1,
+  "is_template": true,
+  "status": "not_run",
+  "batch": null,
+  "test_definition_version": null,
+  "started_at": null,
+  "completed_at": null,
+  "execution": {
+    "host_platform": "windows-x64",
+    "native_windows": null,
+    "project_relative_location": null,
+    "source_commit_before_test": null,
+    "source_commit_after_fixes": null,
+    "uncommitted_changes_present": null
+  },
+  "system": {
+    "windows_version": null,
+    "cpu": null,
+    "ram_bytes": null,
+    "gpu": null,
+    "gpu_memory_bytes": null,
+    "driver_version": null
+  },
+  "candidate": {
+    "product_version": null,
+    "build": null,
+    "runtime_id": null,
+    "package_sha256": null,
+    "test_entrypoint": null
+  },
+  "inference": {
+    "translation_model": null,
+    "translation_model_digest": null,
+    "translation_recipe_version": null,
+    "speech_resource_identity": null,
+    "speech_backend": null,
+    "encoder_dtype": null,
+    "decoder_dtype": null
+  },
+  "checks": {
+    "automated_executed": null,
+    "automated_passed": null,
+    "automated_failed": null,
+    "automated_skipped": null,
+    "real_workflows": [],
+    "preservation_evidence": [],
+    "not_verified": []
+  },
+  "memory": {
+    "measurement_definition": null,
+    "sample_interval_seconds": null,
+    "input_and_configuration_identity": null,
+    "cold_warm_idle_conditions": null,
+    "measurements": [],
+    "release_seconds": null,
+    "reload_seconds": null,
+    "unavailable_metric_reasons": []
+  },
+  "cleanup": {
+    "test_processes_finished": null,
+    "original_services_preserved": null,
+    "original_tasks_and_environments_preserved": null
+  },
+  "handoff": {
+    "shared_or_mac_impact": [],
+    "next_batch_recommendation": null,
+    "remaining_dependencies": [],
+    "public_compact_evidence_files": [],
+    "private_details_kept_out_of_git": null
+  }
+}
