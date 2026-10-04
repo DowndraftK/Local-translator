@@ -40,7 +40,7 @@ class PreviewWindow(QMainWindow):
         self.evidence = {"schema": 1, "candidate": self.identity,
             "started_at": datetime.now(timezone.utc).isoformat(), "platform": platform.system(),
             "qt_version": qVersion(), "qpa_platform": QApplication.platformName(),
-            "desktop_window_shown": False, "events": [], "normal_exit": False,
+            "desktop_window_shown": False, "events": [], "normal_exit": None,
             "inference": False, "production_task_access": False,
             "runtime": {"python_executable": sys.executable, "python_prefix": sys.prefix,
                 "pyside6_module": PySide6.__file__, "qt_plugin_paths": QCoreApplication.libraryPaths()}}
@@ -167,7 +167,9 @@ class PreviewWindow(QMainWindow):
             if not self.close_pending:
                 self.close_pending = True; self.client.shutdown()
             return
-        self.evidence["normal_exit"] = self.client.failure is None
+        # Actual OS process exit must be confirmed externally; this callback only
+        # proves window close + worker drain, not later Qt/Python teardown.
+        self.evidence["window_close_and_worker_shutdown_confirmed"] = self.client.failure is None
         self.evidence["worker_failure"] = self.client.failure
         self.evidence["closed_at"] = datetime.now(timezone.utc).isoformat()
         if self.evidence_path:
@@ -211,4 +213,11 @@ def main(argv=None):
     app = QApplication([]); app.setApplicationName("本地翻译器 B01预览")
     app.setStyle("Fusion"); app.setStyleSheet(STYLE)
     window = PreviewWindow(args.evidence, args.screenshot); window.show()
-    raise SystemExit(app.exec())
+    code = app.exec()
+    # Destroy the widget/AX tree while QApplication and its native accessibility
+    # bridge still exist, rather than during Python interpreter finalization.
+    from shiboken6 import delete
+    delete(window)
+    app.processEvents()
+    delete(app)
+    raise SystemExit(code)
