@@ -1,0 +1,344 @@
+{
+  "schema": 1,
+  "batch": "B01",
+  "recorded_at": "2026-10-04T14:38:11.603352+00:00",
+  "status": "partial_mac_delivered_windows_unverified",
+  "stop_after_batch": true,
+  "later_batches_started": false,
+  "source": {
+    "branch": "codex/cross-platform-b01",
+    "initial_main_commit": "6376bcfeb5cbc9a3bf4cafb4f0c85283106a9f4d",
+    "carried_plan_baseline_commit": "81a7d27",
+    "carried_plan_files": 13,
+    "carried_plan_original_bytes_preserved": true,
+    "candidate_code_commit": "edc1224b312de26ff39b8275468e886068577313",
+    "candidate_working_tree_modified": false,
+    "candidate_prototype_files": 14,
+    "candidate_prototype_hashes_match": true,
+    "final_handoff_identity_source": "artifacts/b01-20261004/source-handoff-manifest.json",
+    "git_push_performed": false,
+    "remote_sha_checked": false,
+    "main_unchanged": true
+  },
+  "identity": {
+    "product_target": "0.2.11",
+    "preview": "b01-preview.1",
+    "mac_build": 50,
+    "mac_candidate": "macos-arm64-build50",
+    "mac_app": "dist/B01-20261004-mac-candidate50/本地翻译器 B01预览.app",
+    "windows_candidate": null,
+    "protocol": {
+      "major": 1,
+      "minor": 0
+    },
+    "python": "3.12.14",
+    "qt": "6.10.2",
+    "dependency_lock_sha256": "9e40c27dc463f0c35e1016bdb056e6b733ca7d0a01f63096c2466991ea1ebd44",
+    "standalone_runtime": false,
+    "public_binary_uploaded": false
+  },
+  "mac_hardware": {
+    "macos": "27.0.1",
+    "build": "26A434",
+    "hardware_model": "Mac17,9",
+    "cpu": "Apple M5 Pro",
+    "ram_bytes": 51539607552,
+    "development_tools": {
+      "clang_version": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+      "swift_version": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)",
+      "git_version": "git version 2.54.0 (Apple Git-157)"
+    }
+  },
+  "checks": {
+    "b01": {
+      "registered": 22,
+      "executed": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "elapsed_seconds": 38.165,
+      "scope": "bounded synthetic protocol, real subprocess, Qt client and frozen fixtures; no inference",
+      "log": "b01-tests-qt6102.log"
+    },
+    "swift_full": {
+      "registered": 70,
+      "executed": 69,
+      "passed": 69,
+      "failed": 0,
+      "skipped": 1,
+      "skip_reason": "optional OCR recognition acceptance not enabled",
+      "elapsed_seconds": 0.486,
+      "log": "swift-tests-final.log"
+    },
+    "legacy_python_full": {
+      "registered": 88,
+      "executed": 88,
+      "passed": 88,
+      "failed": 0,
+      "skipped": 0,
+      "elapsed_seconds": 2.67,
+      "log": "legacy-python-tests.log"
+    },
+    "total_final_group_registered": 180,
+    "total_final_group_executed_passed": 179,
+    "total_skipped": 1,
+    "repeated_runs_counted_again": false,
+    "windows_executed": 0
+  },
+  "mac_gui": {
+    "candidate": "macos-arm64-build50",
+    "native_desktop": true,
+    "tool": "CUA native app AX/buttons/keyboard/screenshot; external process wait for actual exit",
+    "startup_runs": 2,
+    "normal_exit_runs": 2,
+    "ready_confirmations": 3,
+    "shutdown_confirmations": 3,
+    "probe_cancelled": 1,
+    "probe_completed": 1,
+    "placeholder_navigation_keyboard_pages": 4,
+    "complete_screen_reader_acceptance": false,
+    "runs": [
+      {
+        "run": "desktop-1",
+        "ui_pid": 90520,
+        "qt": "6.10.2",
+        "qpa": "cocoa",
+        "desktop_window_shown": true,
+        "ready_confirmations": 1,
+        "worker_pids": [
+          90524
+        ],
+        "sessions": [
+          "0dcba6af-d7a8-40ae-9379-31007de56674"
+        ],
+        "probe_results": [
+          {
+            "status": "cancelled",
+            "confirmed_steps": 29,
+            "strict_prefix": true,
+            "tail_drained": true
+          }
+        ],
+        "shutdown_confirmations": 1,
+        "window_close_and_worker_shutdown_confirmed": true,
+        "worker_failure": null,
+        "os_process_exit_code": 0,
+        "normal_exit": true,
+        "ui_evidence": "mac50-ui-evidence.json",
+        "external_exit_evidence": "mac50-external-exit.json"
+      },
+      {
+        "run": "desktop-2-reopen",
+        "ui_pid": 90620,
+        "qt": "6.10.2",
+        "qpa": "cocoa",
+        "desktop_window_shown": true,
+        "ready_confirmations": 2,
+        "worker_pids": [
+          90622,
+          90640
+        ],
+        "sessions": [
+          "4f8e4d77-9a89-49b9-b924-bb067d6eb088",
+          "94290e7b-ff65-4f6d-ba9e-da6c4d7d24a1"
+        ],
+        "probe_results": [
+          {
+            "status": "completed",
+            "confirmed_steps": 40,
+            "strict_prefix": true,
+            "tail_drained": true
+          }
+        ],
+        "shutdown_confirmations": 2,
+        "window_close_and_worker_shutdown_confirmed": true,
+        "worker_failure": null,
+        "os_process_exit_code": 0,
+        "normal_exit": true,
+        "ui_evidence": "mac50-reopen-ui-evidence.json",
+        "external_exit_evidence": "mac50-reopen-external-exit.json"
+      }
+    ],
+    "screenshot": "mac50-reopen-native-window.png",
+    "earlier_candidates": [
+      {
+        "build": 47,
+        "source_commit": "c158db5147c294657ec9910ee65d10b46e9e8bd2",
+        "qt": "6.8.3",
+        "result": "native executable identity lost; verified PIDs terminated",
+        "normal_gui_exit": false,
+        "candidate_directory": "dist/B01-20261004-mac-candidate"
+      },
+      {
+        "build": 48,
+        "source_commit": "05c4d26dd6757827baa7419ca4d6a77837772d2c",
+        "qt": "6.8.3",
+        "result": "native accessibility widget teardown SIGSEGV; exit139",
+        "normal_gui_exit": false,
+        "candidate_directory": "dist/B01-20261004-mac-candidate48"
+      },
+      {
+        "build": 49,
+        "source_commit": "fc3e098282f87a3659e4051323aa61bafc07c02d",
+        "qt": "6.8.3",
+        "result": "native accessibility widget teardown SIGSEGV; exit139",
+        "normal_gui_exit": false,
+        "candidate_directory": "dist/B01-20261004-mac-candidate49"
+      }
+    ],
+    "earlier_build48_close_event_normal_exit_value_invalid": true,
+    "fix": "new isolated pinned Qt6.10.2, retain explicit widget-before-application teardown and require worker confirmations"
+  },
+  "fixtures": {
+    "authored_synthetic_only": true,
+    "swift_recipes": 4,
+    "schema1_snapshots": 2,
+    "python_subtitle_recipes": 2,
+    "verification_writes": 0,
+    "production_text_schema": 1,
+    "production_sqlite_schema": 3,
+    "swift_binding_dialect": "foundation-pretty-sorted-unescaped-slashes-v1",
+    "python_binding_dialect": "python-compact-sorted-utf8-v1",
+    "actual_task_migration": false,
+    "inference_run": false
+  },
+  "fixed_model_contract": {
+    "model": "hy-mt2:7b-q8",
+    "profile": "hy-mt2-faithful-v2",
+    "digest": "202e0ccbae412a107d24c32bc08d7674c579c459a5942e7ed42e5fff631630d9",
+    "parameters": {
+      "temperature": 0.1,
+      "top_p": 0.6,
+      "top_k": 20,
+      "repeat_penalty": 1.0,
+      "seed": 42,
+      "num_ctx": 8192,
+      "num_predict": 4096,
+      "keep_alive": "5m",
+      "think_false_only_for_thinking_models": true
+    },
+    "speech_max_context_tokens": 128,
+    "mac_speech_precision": "MLX encoder / MPS FP32 decoder unchanged",
+    "resources_or_models_downloaded": false
+  },
+  "dependencies": {
+    "packages": {
+      "PySide6-Essentials": "6.10.2",
+      "shiboken6": "6.10.2"
+    },
+    "mac_environment": "artifacts/b01-20261004/venv-qt6102",
+    "old_b01_qt683_environment_retained": true,
+    "mac_wheels_obtained_and_hash_verified": true,
+    "mac_wheel_bytes": 106392896,
+    "windows_wheel_metadata_bytes": 75768542,
+    "windows_wheels_obtained": false,
+    "global_environment_modified": false,
+    "original_speech_environment_modified": false,
+    "license_metadata": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "qt_wheel_license_notice_file_count": 0,
+    "qt_reference_texts_from_official_v6102": 3,
+    "reference_text_source_manifest": "upstream/qt6102-license-reference-sources.json",
+    "public_distribution_license_closure": false,
+    "missing_license_work": [
+      "actual Qt module/plugin/third-party notices",
+      "corresponding sources/build identity",
+      "dynamic replacement and relink closure",
+      "Windows actual wheel inspection"
+    ]
+  },
+  "footprint": {
+    "method": "sum of logical file lengths; excludes external base CPython; not disk allocation or complete independent install",
+    "app": {
+      "files": 18,
+      "file_bytes": 117751
+    },
+    "development_venv": {
+      "files": 3616,
+      "file_bytes": 392156456
+    },
+    "pyside_installation": {
+      "files": 2662,
+      "file_bytes": 325220678
+    }
+  },
+  "memory": {
+    "candidate": "macos-arm64-build50",
+    "state": "native desktop window after complete 40-step probe, reconnected worker ready, no models",
+    "method": "macOS ps RSS KiB converted to bytes; per-process snapshots, not peak, physical aggregate or speech workload gain",
+    "samples": 6,
+    "interval_seconds": 2,
+    "last_rss_bytes": {
+      "ui": 217464832,
+      "worker": 21889024
+    },
+    "peak_measured": false,
+    "process_rss_summed_as_physical_total": false,
+    "speech_improvement_claim": false
+  },
+  "windows": {
+    "user_reported_off": true,
+    "ssh_attempted_in_batch": false,
+    "project_root": null,
+    "suggested_root_only": "C:\\Projects\\Local-translator",
+    "local_repo_branch_commit_verified": false,
+    "latest_task_documents_received": false,
+    "user_reported_specs": {
+      "os": "Windows11 x64",
+      "cpu": "AMD Ryzen 7 8845H",
+      "ram": "32GB",
+      "storage": "two 1TB SSDs",
+      "gpu": "RTX4070 Laptop GPU"
+    },
+    "actual_hardware_read": null,
+    "dedicated_vram_bytes": null,
+    "driver": null,
+    "volumes_and_remaining_space": null,
+    "tools": null,
+    "external_resources": null,
+    "native_build": null,
+    "process_startup": null,
+    "logged_in_desktop_gui": null,
+    "native_exit": null,
+    "cuda_ocr_microphone_installer_tested": false,
+    "connection_configuration_modified": false
+  },
+  "preservation_and_cleanup": {
+    "original_production_file_hashes_checked": 61,
+    "original_production_changed": [],
+    "old_app_versions_builds": {
+      "0.2.10": 46,
+      "0.2.9": 35
+    },
+    "old_and_final_app_strict_deep_signatures_ok": true,
+    "b01_remaining_processes": 0,
+    "b01_test_mounts_created": 0,
+    "original_ollama_pid_1557_present": true,
+    "failed_build48_residual_worker_gracefully_stopped_then_parent_sigterm": true,
+    "original_tasks_migrated_cleaned_or_rewritten": false,
+    "windows_services_or_login_config_changed": false
+  },
+  "evidence_directory": "artifacts/b01-20261004",
+  "evidence_sha256": {
+    "b01-tests-qt6102.log": "1c0c5b9e8795a52d91d70afb91dbe2fce4d2b9e546931f5f2eeaf78232d8f0fd",
+    "swift-tests-final.log": "47cf3f7fbc609f8c6e3927e3e6d6f3aba3759e57a5690fff785dc2c794e6b920",
+    "legacy-python-tests.log": "27c816391f96ccc5ed2b5abb4d7365246822e5a3c7f463e87e59beba5e5001f6",
+    "mac50-ui-evidence.json": "53f4f8012d0d9714432d8af979109d1d2b0e6883505d4a1cfd17fa645e16d5ad",
+    "mac50-external-exit.json": "15e2ea453b3af585681b4ae578abd59cde6c95a77e47b966795584a0eb481cb8",
+    "mac50-reopen-ui-evidence.json": "c2839610e0e538e58d149cc392ac8ae20bd49d8b2637e4ba78dfbae053d32d0c",
+    "mac50-reopen-external-exit.json": "6b0059328e7cfe6f8c355b23310970ff46214229a172393fcd39a42f7ce3ab05",
+    "mac50-reopen-native-window.png": "4a91f2fdc1b61cfcb4de6f2afce9808c52fc929a137cdccb20bef466a48ea534",
+    "mac50-package-and-protection-verification.json": "fdcf4a28fbc1b083b29e9ea67491b251f11b08b33d6722b7643549489be0ceea",
+    "mac50-idle-memory-private.json": "6d08d5d3c319281e0dbaac17592765d542427d202cc6265e6e962cc0d42fcf1c",
+    "cleanup-and-preservation-private.json": "e6a712520d8a56d7b8b658c6bd550b5c065454831ef8e1da354af1d5be9c1aa6",
+    "mac48-residual-cleanup.json": "bb8b79b3b499269b62a1ffde49adcd81e7745bb4c495b6a4947087fe1ec62003"
+  },
+  "next_prerequisites": [
+    "Windows powered on and normally logged in",
+    "confirm actual Windows project root/local repository and preserve changes",
+    "explicit source handoff and confirm continuation branch/latest documents",
+    "read hardware/dedicated VRAM/driver/volumes/tools/external resources",
+    "new controlled Python/Qt environment and native Windows build/protocol checks",
+    "real logged-in Windows desktop interaction and confirmed process exit",
+    "separate user instruction before B02 or any later batch"
+  ]
+}

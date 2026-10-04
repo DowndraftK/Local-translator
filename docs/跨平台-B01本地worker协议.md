@@ -28,6 +28,8 @@
 
 `disconnected → connecting → ready → running → cancelling → ready`，停止进入`closing → disconnected`，错误进入`failed`。启动**30秒**未收到匹配ready则明确失败，只停止父进程持有的本批worker；系统进程启动事件/SSH/Codex服务状态不能代替ready。正常关闭先等待协议排空，5秒无退出才强制结束**这一QProcess**，强制路径登记`shutdown_unconfirmed_tail`，不能标安全通过。旧Ollama、旧App、Codex远程服务与其他worker均不按进程名清理。
 
+客户端将exit0但缺ready或shutdown确认视为失败，不以系统退出码替代协议确认。窗口回调只证实窗口/worker排空，OS实际退出须外部等待核对；正常关闭事件不能证明其后的Qt/Python清理未崩溃。
+
 客户端拒绝旧session、乱序/重复sequence、未知request、错操作/lease以及无尾部确认的完成；同窗口重连通过QProcess对象身份隔离旧回调。取消晚于已完成操作只作幂等确认，不把成功结果覆盖成取消。
 
 ## 数据兼容边界
