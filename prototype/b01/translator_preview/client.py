@@ -27,6 +27,8 @@ class WorkerClient(QObject):
         self.diagnostic = None
         self.terminal = None
         self.failure = None
+        self.ready_confirmed = False
+        self.shutdown_confirmed = False
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.timeout.connect(self.startup_expired)
         self.timeout_ms = startup_timeout_ms
@@ -42,6 +44,7 @@ class WorkerClient(QObject):
         self.session_id = str(uuid.uuid4()); self.tracker = EventTracker(self.session_id)
         self.buffer.clear(); self.stderr.clear(); self.requests.clear()
         self.operation = self.terminal = self.failure = self.diagnostic = None
+        self.ready_confirmed = self.shutdown_confirmed = False
         process = QProcess(self); self.process = process
         environment = QProcessEnvironment.systemEnvironment()
         for key in environment.keys():
@@ -99,6 +102,7 @@ class WorkerClient(QObject):
         if kind == "ready":
             if self.state != "connecting" or request_kind != "hello":
                 raise ProtocolError("unexpected_ready")
+            self.ready_confirmed = True
             self.timer.stop(); self.diagnostic = event["diagnostics"]; self.set_state("ready")
         elif kind in ("operation.started", "progress", "cancel.accepted", "operation.finished"):
             if not self.operation or (event.get("operation_id"), event.get("lease_id")) != self.operation:
@@ -116,6 +120,7 @@ class WorkerClient(QObject):
         elif kind == "shutdown.confirmed" and request_kind == "shutdown":
             if self.state != "closing" or event.get("tail_drained") is not True:
                 raise ProtocolError("unexpected_shutdown")
+            self.shutdown_confirmed = True
         elif kind == "cancel.already_finished" and request_kind == "cancel":
             if not self.terminal or (event.get("operation_id"), event.get("lease_id")) != (
                     self.terminal["operation_id"], self.terminal["lease_id"]):
@@ -176,5 +181,9 @@ class WorkerClient(QObject):
         self.timer.stop(); self.shutdown_timer.stop()
         if self.buffer or self.operation or code != 0:
             self.failure = self.failure or "worker_exit_without_confirmed_tail"
+        if not self.ready_confirmed:
+            self.failure = self.failure or "worker_exit_before_ready"
+        if not self.shutdown_confirmed:
+            self.failure = self.failure or "worker_exit_without_shutdown_confirmation"
         self.set_state("failed" if self.failure else "disconnected")
         self.stopped.emit(code)

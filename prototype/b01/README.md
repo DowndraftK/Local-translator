@@ -1,18 +1,20 @@
 # B01 共享桌面界面开发预览
 
-主路线：Qt6 / PySide6-Essentials **6.8.3**、shiboken6 **6.8.3**、独立 CPython **3.12.14** 开发环境。共用产品目标 **0.2.11**，候选 `b01-preview.1`，协议 **1.0**。这是项目内小型开发原型，不是 B09 独立运行包或 B12 安装器。旧 SwiftUI 0.2.10/build46 和 0.2.9/build35 不替换。
+主路线：Qt6 / PySide6-Essentials **6.10.2**、shiboken6 **6.10.2**、独立 CPython **3.12.14** 开发环境。共用产品目标 **0.2.11**，候选 `b01-preview.1`，协议 **1.0**。这是项目内小型开发原型，不是 B09 独立运行包或 B12 安装器。旧 SwiftUI 0.2.10/build46 和 0.2.9/build35 不替换。
 
 只接入能力/诊断、真实 worker 启动确认、有限无模型进度验证、操作/请求/租约身份、安全取消/尾部确认、退出和重新连接。其他功能在界面明确“尚未实现”，预览没有生产任务根目录或推理入口，也不连接 Ollama。合成步骤结果只用于验证进程生命周期，不是成功译文或保存恢复验收。
 
 ## 固定开发环境
 
-`dependencies.lock.json` 固定两平台 wheel 的 HTTPS 来源、字节及 SHA-256。开发解释器须为明确已确认的本地 CPython3.12.14，不借任意全局/Conda 环境安装库；Windows解释器及工具尚待实机确认。`prepare_dev.py` 只创建仓库 `artifacts` 下**尚不存在**的新 venv，先验证全部 wheel 再安装。实际 wheel 的 LICENSE/第三方 notices 全部保留，不裁剪。不能仅依据 wheel metadata 宣称整个 Qt 软件包已具备公共分发条件。
+`dependencies.lock.json` 固定两平台 wheel 的 HTTPS 来源、字节及 SHA-256。开发解释器须为明确已确认的本地 CPython3.12.14，不借任意全局/Conda 环境安装库；Windows解释器及工具尚待实机确认。`prepare_dev.py` 只创建仓库 `artifacts` 下**尚不存在**的新 venv，先验证全部 wheel 再安装。实际两份 Mac wheel 均未附 LICENSE/NOTICE/COPYING 文件（6.8.3和6.10.2均如此），不能称为已随包取得完整许可文本。已从Qt官方qtbase v6.10.2读取LGPL3、GPL3及GPL2参考文本并登记hash；模块/插件/第三方许可、对应源码、动态替换与重链接仍须B10对实际产物闭环。不能仅依据wheel metadata宣称整个Qt软件包已具备公共分发条件。
 
-Mac本批现有环境在 `artifacts/b01-20261004/venv`；从根目录运行：
+6.8.3候选在macOS原生辅助功能访问后退出崩溃，原环境和失败候选均保留。当前固定6.10.2的新环境；实际桌面交互和OS退出结果见[开发记录](../../docs/跨平台-B01开发记录.md)，不能只用窗口关闭事件宣称正常退出。
+
+Mac本批现有环境在 `artifacts/b01-20261004/venv-qt6102`；从根目录运行：
 
 ```sh
-artifacts/b01-20261004/venv/bin/python -I -B prototype/b01/tests/test_protocol.py
-artifacts/b01-20261004/venv/bin/python -I -B prototype/b01/launch.py
+artifacts/b01-20261004/venv-qt6102/bin/python -I -B prototype/b01/tests/test_protocol.py
+artifacts/b01-20261004/venv-qt6102/bin/python -I -B prototype/b01/launch.py
 ```
 
 如果重建环境，用已确认解释器运行下面脚本，目录必须为新的：
@@ -24,7 +26,7 @@ artifacts/b01-20261004/venv/bin/python -I -B prototype/b01/launch.py
 构建在本平台生成独立候选与原型源码逐文件 hash，Mac从现有全部 marker/Info.plist查最高 build 后占号，失败也不复用；Windows单独记时间身份：
 
 ```sh
-artifacts/b01-20261004/venv/bin/python -I -B prototype/b01/build_preview.py --output dist/B01-新候选目录
+artifacts/b01-20261004/venv-qt6102/bin/python -I -B prototype/b01/build_preview.py --output dist/B01-新候选目录
 ```
 
 Mac生成独立 `.app` 与 arm64 原生启动器，固定本批 venv路径，临时签名并严格核验。该 `.app` 仍依赖受控开发环境，不能移到其他机器称为独立产品。Windows生成源码/字节码检查及绑定本地解释器的 `Launch-B01.cmd`；不是独立 EXE/安装器。

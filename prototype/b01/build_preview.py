@@ -24,6 +24,8 @@ def main():
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
     project = source.parents[1]
+    lock_path = source / "dependencies.lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
     output = args.output.resolve()
     if output.exists() or not output.is_relative_to(project / "dist"):
         parser.error("Use a NEW candidate directory under this repository's dist directory.")
@@ -34,13 +36,13 @@ def main():
     branch = run("git", "-C", project, "branch", "--show-current")
     if not branch.startswith("codex/"):
         parser.error("Build from the B01 continuation feature branch, not main.")
-    for package in ("PySide6-Essentials", "shiboken6"):
-        if importlib.metadata.version(package) != "6.8.3":
+    for package in lock["packages"]:
+        if importlib.metadata.version(package["name"]) != package["version"]:
             parser.error("Qt development dependency mismatch.")
     if sys.platform not in ("darwin", "win32"):
         parser.error("Build on native macOS/Windows only.")
     from PySide6.QtCore import qVersion
-    if qVersion() != "6.8.3":
+    if qVersion() != lock["qt"]:
         parser.error("Loaded Qt does not match lock.")
     output.mkdir(parents=True)
     mac_build = None
@@ -78,6 +80,8 @@ def main():
         "source_files": {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
         "python_version": platform.python_version(), "python_executable": sys.executable,
         "qt_version": qVersion(), "protocol": {"major": 1, "minor": 0},
+        "dependency_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
+        "dependencies": {item["name"]: item["version"] for item in lock["packages"]},
         "standalone_runtime": False, "distribution": "local-development-preview-only"}
     (package / "build-identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     for path in package.rglob("*.py"):

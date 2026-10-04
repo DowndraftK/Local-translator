@@ -227,6 +227,32 @@ class QtClientTests(unittest.TestCase):
             self.assertGreater(elapsed, 28); self.assertLess(elapsed, 34)
             self.assertEqual(client.failure, "startup_unconfirmed_30s")
 
+    def test_qt_client_exit_zero_before_ready_is_failure(self):
+        from translator_preview.client import WorkerClient
+        from PySide6.QtCore import QProcess
+        with tempfile.TemporaryDirectory(prefix="b01-no-ready-") as temporary:
+            stub = Path(temporary) / "no_ready.py"; stub.write_text("pass\n")
+            client = WorkerClient(launch_path=stub); client.connect_worker()
+            self.wait(lambda: client.process.state() == QProcess.NotRunning)
+            self.assertEqual(client.state, "failed")
+            self.assertEqual(client.failure, "worker_exit_before_ready")
+
+    def test_qt_client_exit_zero_without_shutdown_ack_is_failure(self):
+        from translator_preview.client import WorkerClient
+        from PySide6.QtCore import QProcess
+        with tempfile.TemporaryDirectory(prefix="b01-no-shutdown-ack-") as temporary:
+            stub = Path(temporary) / "no_shutdown_ack.py"
+            stub.write_text("import json, sys\n"
+                "hello = json.loads(sys.stdin.readline())\n"
+                "hello.update(type='ready', sequence=1, diagnostics={})\n"
+                "print(json.dumps(hello), flush=True)\n"
+                "sys.stdin.readline()\n")
+            client = WorkerClient(launch_path=stub); client.connect_worker()
+            self.wait(lambda: client.state == "ready")
+            client.shutdown(); self.wait(lambda: client.process.state() == QProcess.NotRunning)
+            self.assertEqual(client.state, "failed")
+            self.assertEqual(client.failure, "worker_exit_without_shutdown_confirmation")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
