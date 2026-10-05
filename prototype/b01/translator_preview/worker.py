@@ -17,24 +17,26 @@ from translator_core.contracts import default_recipe, sha
 from translator_core.ollama import Ollama
 from translator_core.planning import platform_boundaries
 from translator_core.store import TaskStore, atomic_write
-from translator_core.tasks import TextTasks
+from translator_core.document_tasks import DocumentTasks
+from translator_core.pdf_adapter import platform_pdf_adapter
+from .runtime import owned_python
 
 from . import PREVIEW_ID, PRODUCT_VERSION
 from .protocol import (PROTOCOL, MAX_FRAME_BYTES, MAX_STEPS, SNAPSHOT_CHUNK_BYTES, ProtocolError,
                        decode, encode, identifier)
 
 
-def capabilities(configured=False):
+def capabilities(configured=False, pdf_ready=False):
     return {"diagnostics": "ready", "lifecycle_probe": "ready",
             "text_translation": "ready" if configured and sys.platform in ("darwin", "win32") else "requires_verified_platform_adapter",
             "task_read_resume": "ready" if configured else "requires_preview_root",
-            "pdf_txt": "not_implemented_b03", "ocr": "not_implemented_b04",
+            "pdf_txt": "ready" if configured and pdf_ready else "txt_ready_pdf_adapter_missing" if configured else "requires_preview_root", "ocr": "not_implemented_b04",
             "speech_file": "not_implemented_b05", "refinement_playback": "not_implemented_b06",
             "microphone": "not_implemented_b07", "service_unload": "not_implemented_b08",
             "runtime_installer": "not_implemented_b09", "public_download": "not_implemented_b11"}
 
 
-def diagnostics(configured=False):
+def diagnostics(configured=False, pdf_ready=False):
     return {"preview": PREVIEW_ID, "product_version": PRODUCT_VERSION,
             "platform": sys.platform, "machine": platform.machine(),
             "os_release": platform.release(), "python": platform.python_version(),
@@ -43,11 +45,11 @@ def diagnostics(configured=False):
             "transport": "anonymous-pipes-jsonl", "models_loaded": False,
             "production_tasks_opened": False, "gpu_verified": False,
             "shared_core": CORE_VERSION, "inference_on_open": False,
-            "capabilities": capabilities(configured)}
+            "capabilities": capabilities(configured, pdf_ready)}
 
 
 class Worker:
-    def __init__(self, session_id, output, task_root=None, boundary_helper=None, endpoint="http://127.0.0.1:11434"):
+    def __init__(self, session_id, output, task_root=None, boundary_helper=None, endpoint="http://127.0.0.1:11434", pdf_helper=None, pdf_library=None):
         self.session_id, self.output = session_id, output
         self.output_lock = threading.Lock()
         self.transfer_lock = threading.Lock()
@@ -61,8 +63,12 @@ class Worker:
         self.thread = None
         self.tasks = None
         self.endpoint = endpoint
+        self.pdf_warning = None
         if task_root:
-            self.tasks = TextTasks(TaskStore(task_root), platform_boundaries(boundary_helper),
+            store = TaskStore(task_root); adapter = None
+            try: adapter = platform_pdf_adapter(store.root / "page-handoff", pdf_helper, owned_python(), pdf_library)
+            except (CoreError, OSError) as exc: self.pdf_warning = str(exc)
+            self.tasks = DocumentTasks(store, platform_boundaries(boundary_helper), adapter,
                                    engine_factory=lambda cancel: Ollama(self.endpoint, cancel=cancel))
 
     def emit(self, kind, req, **fields):
@@ -87,14 +93,18 @@ class Worker:
         if kind == "hello" and not self.hello:
             # Confirmation is emitted only after the real request loop is entered.
             self.hello = True
-            info = diagnostics(self.tasks is not None)
+            info = diagnostics(self.tasks is not None, bool(self.tasks and self.tasks.adapter))
             if self.tasks: info["splitter_version"] = self.tasks.boundaries.splitter_version
+            info["pdf_adapter"] = self.tasks.adapter.identity if self.tasks and self.tasks.adapter else self.pdf_warning
             self.emit("ready", req, diagnostics=info)
         elif not self.hello:
             self.error(req, "handshake_required")
         elif kind == "diagnose":
-            self.emit("diagnostics", req, diagnostics=diagnostics(self.tasks is not None))
-        elif kind.startswith("task.") or kind == "service.check":
+            info = diagnostics(self.tasks is not None, bool(self.tasks and self.tasks.adapter))
+            if self.tasks: info["splitter_version"] = self.tasks.boundaries.splitter_version
+            info["pdf_adapter"] = self.tasks.adapter.identity if self.tasks and self.tasks.adapter else self.pdf_warning
+            self.emit("diagnostics", req, diagnostics=info)
+        elif kind.startswith(("task.", "document.")) or kind == "service.check":
             self.text_request(req)
         elif kind == "lease.renew":
             with self.operation_lock:
@@ -201,10 +211,14 @@ class Worker:
             self.error(req, "preview_root_required", "先指定独立预览任务目录。"); return
         try:
             kind = req["type"]
-            if kind in ("task.start", "service.check"):
+            if kind in ("task.start", "service.check", "document.select", "document.extract", "document.render"):
                 self.start_text(req); return
             if self.operation and kind not in ("task.list", "task.export"):
                 raise CoreError("请先安全取消当前操作。", "busy")
+            if kind in ("task.save", "task.export"):
+                task = self.tasks.task
+                if not task or req.get("task_id") != task["id"] or req.get("revision") != task["revision"]:
+                    raise CoreError("请求不属于当前任务修订。", "request_revision_mismatch")
             if kind == "task.list":
                 items, errors = self.tasks.store.list()
                 # A task list can also exceed a JSONL frame; use the same bounded transfer.
@@ -213,6 +227,9 @@ class Worker:
             elif kind == "task.create":
                 source = self.tasks.store.incoming(req.get("input_file"), req.get("sha256"), req.get("byte_count"))
                 self.snapshot(req, self.tasks.create(source, req.get("direction")))
+                self.emit("task.done", req)
+            elif kind == "document.create":
+                self.snapshot(req, self.tasks.create_document(req.get("selection_token"), req.get("first"), req.get("last"), req.get("direction")))
                 self.emit("task.done", req)
             elif kind == "task.open":
                 self.snapshot(req, self.tasks.open(req.get("task_id"))); self.emit("task.done", req)
@@ -235,13 +252,22 @@ class Worker:
         lease_ms = req.get("lease_ms", 20000)
         if type(lease_ms) is not int or not 100 <= lease_ms <= 30000:
             raise CoreError("操作租约超出有界范围。")
+        if req["type"] in ("document.extract", "document.render", "task.start"):
+            task = self.tasks.task
+            if not task or (req.get("task_id"), req.get("revision")) != (task["id"], task["revision"]):
+                raise CoreError("请求不属于当前任务修订。", "request_revision_mismatch")
+            if req["type"] == "document.render":
+                if task["kind"] != "文档": raise CoreError("当前不是文档任务。", "task_kind_mismatch")
+                page = next((p for p in task["document"]["pages"] if p["id"] == req.get("page")), None)
+                if not page or page["revision"] != req.get("page_revision"):
+                    raise CoreError("来源回看请求不属于当前页修订。", "page_revision_mismatch")
         with self.operation_lock:
             if self.operation is not None: raise CoreError("已有活动操作。", "busy")
             op = dict(id=op_id, lease=lease_id, cancel=threading.Event(), lease_ms=lease_ms,
                       deadline=time.monotonic() + lease_ms / 1000, expired=False)
             self.operation = op
             self.emit("operation.started", req, operation_id=op_id, lease_id=lease_id,
-                      lease_ms=lease_ms, result_kind="local-text" if req["type"] == "task.start" else "service-diagnostic")
+                      lease_ms=lease_ms, result_kind=req["type"], task_id=req.get("task_id"), revision=req.get("revision"))
             self.thread = threading.Thread(target=self.run_text, args=(req, op), daemon=False)
             self.thread.start()
 
@@ -263,6 +289,16 @@ class Worker:
                 op["engine"] = engine
                 detail = engine.verify(default_recipe(req.get("direction", "en-zh")))
                 status = "completed"
+            elif req["type"] == "document.select":
+                path = req.get("source_path")
+                if not isinstance(path, str) or len(path) > 4096: raise CoreError("来源路径无效。")
+                detail = self.tasks.select_document(path, op["id"], op["cancel"]); status = "completed"
+            elif req["type"] == "document.extract":
+                status = self.tasks.extract(op["id"], op["cancel"], lambda snapshot: self.snapshot(req, snapshot, op))
+            elif req["type"] == "document.render":
+                detail = self.tasks.render(req.get("page"), op["cancel"])
+                detail.update(task_id=req["task_id"], revision=req["revision"], page_revision=req["page_revision"])
+                status = "completed"
             else:
                 status = self.tasks.run(op["id"], op["cancel"], lambda snapshot: self.snapshot(req, snapshot, op))
         except Exception as exc:
@@ -271,11 +307,11 @@ class Worker:
             detail = {"error": str(exc), "code": getattr(exc, "code", type(exc).__name__)}
         finally:
             ended.set(); watcher.join(timeout=1)
-            if req["type"] == "task.start": self.snapshot(req, self.tasks.snapshot(), op)
+            if req["type"] in ("task.start", "document.extract"): self.snapshot(req, self.tasks.snapshot(), op)
             with self.operation_lock:
                 self.emit("operation.finished", req, operation_id=op["id"], lease_id=op["lease"],
                           status="lease_expired" if op["expired"] else status, tail_drained=True,
-                          result={"kind": "text-task" if req["type"] == "task.start" else "service-diagnostic", "detail": detail})
+                          result={"kind": {"task.start":"text-task", "service.check":"service-diagnostic", "document.select":"document-selection", "document.extract":"document-extraction", "document.render":"document-render"}[req["type"]], "detail": detail})
                 self.last_finished = (op["id"], op["lease"]); self.operation = None
 
 
@@ -285,8 +321,10 @@ def main(argv=None):
     parser.add_argument("--task-root")
     parser.add_argument("--boundary-helper")
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
+    parser.add_argument("--pdf-helper")
+    parser.add_argument("--pdf-library")
     args = parser.parse_args(argv)
-    worker = Worker(identifier(args.session_id), sys.stdout.buffer, args.task_root, args.boundary_helper, args.endpoint)
+    worker = Worker(identifier(args.session_id), sys.stdout.buffer, args.task_root, args.boundary_helper, args.endpoint, args.pdf_helper, args.pdf_library)
     try:
         while raw := sys.stdin.buffer.readline(MAX_FRAME_BYTES + 1):
             try:

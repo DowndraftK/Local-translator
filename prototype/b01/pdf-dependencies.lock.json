@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "purpose": "B03 Windows local PDF text/render facts only; no OCR resources",
+  "source": "https://pypi.org/project/pypdfium2/5.14.0/",
+  "upstream": "https://github.com/pypdfium2-team/pypdfium2",
+  "license": "BSD-3-Clause / Apache-2.0; bundled PDFium third-party notices required",
+  "packages": [{
+    "name": "pypdfium2",
+    "version": "5.14.0",
+    "filename": "pypdfium2-5.14.0-py3-none-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/00/dc/ca7874924c9cfd701ad53f89529968523790e70473e0b71e834668316148/pypdfium2-5.14.0-py3-none-win_amd64.whl",
+    "bytes": 3947280,
+    "sha256": "149fd5c6397b8df8bf7911a93506eff0be874f877afe7ac936cf5d37d21a6a06"
+  }],
+  "install": "new project artifacts directory only; old Python/Qt environments unchanged"
+}

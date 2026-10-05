@@ -1,5 +1,6 @@
 """Schema1 durable snapshots in an explicitly separate, single-writer preview root."""
 import os
+import hashlib
 import shutil
 import sys
 import threading
@@ -12,6 +13,54 @@ from .contracts import (MAX_INPUT_BYTES, MAX_SNAPSHOT_BYTES, decode_snapshot,
                         encode_snapshot, sha, task_id)
 
 MARKER = b"LocalTranslator B02 isolated text store v1\n"
+MAX_DOCUMENT_BYTES = 256_000_000
+
+
+def file_identity(path, limit=MAX_DOCUMENT_BYTES, cancel=None):
+    """Bounded streaming hash; a changed/opened source is never accepted silently."""
+    path = Path(path)
+    if is_link(path) or not path.is_file():
+        raise CoreError("来源文件缺失或路径不安全。", "unsafe_path")
+    digest = hashlib.sha256(); count = 0
+    with path.open("rb") as handle:
+        before = os.fstat(handle.fileno())
+        if before.st_size > limit: raise CoreError("文件超出256,000,000字节或本任务容量上限。", "resource_limit")
+        while block := handle.read(65536):
+            if cancel and cancel.is_set():
+                from . import Cancelled
+                raise Cancelled()
+            count += len(block)
+            if count > limit: raise CoreError("文件超过容量上限。", "resource_limit")
+            digest.update(block)
+        after = os.fstat(handle.fileno())
+    if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino) or count != before.st_size:
+        raise CoreError("读取时来源发生变化，未封存。", "source_changed")
+    return count, digest.hexdigest()
+
+
+def atomic_copy(source, target, count, fingerprint, cancel=None):
+    """Copy immutable assets with constant memory and verify before publication."""
+    source, target = Path(source), Path(target)
+    if is_link(source) or not source.is_file() or is_link(target) or is_link(target.parent):
+        raise CoreError("封存路径不安全。", "unsafe_path")
+    temp = target.with_name(".copy-" + uuid.uuid4().hex)
+    digest = hashlib.sha256(); obtained = 0
+    try:
+        with source.open("rb") as reader, temp.open("xb") as writer:
+            while block := reader.read(65536):
+                if cancel and cancel.is_set():
+                    from . import Cancelled
+                    raise Cancelled()
+                obtained += len(block)
+                if obtained > count or obtained > MAX_DOCUMENT_BYTES:
+                    raise CoreError("来源大小变化或超限。", "source_mismatch")
+                digest.update(block); writer.write(block)
+            writer.flush(); os.fsync(writer.fileno())
+        if obtained != count or digest.hexdigest() != fingerprint:
+            raise CoreError("来源字节/hash不匹配，未封存。", "source_mismatch")
+        os.replace(temp, target)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def is_link(path):
@@ -124,8 +173,14 @@ class TaskStore:
         name = cls.asset_name(task)
         if name is None:
             return None
-        data = safe_file(Path(directory) / name, MAX_INPUT_BYTES)
         asset = task["asset"]
+        if task.get("kind") == "文档":
+            path = Path(directory) / name
+            count, fingerprint = file_identity(path)
+            if type(asset.get("byteCount")) is not int or count != asset["byteCount"] or fingerprint != asset.get("fingerprint"):
+                raise CoreError("封存源副本不匹配；仍可阅读/导出，禁止提取、识别或继续。", "source_mismatch")
+            return path
+        data = safe_file(Path(directory) / name, MAX_INPUT_BYTES)
         if type(asset.get("byteCount")) is not int or len(data) != asset["byteCount"] or sha(data) != asset.get("fingerprint"):
             raise CoreError("封存源副本不匹配；仍可阅读/导出，禁止继续。", "source_mismatch")
         return data
@@ -164,8 +219,8 @@ class TaskStore:
             except CoreError: continue
             try:
                 task, warning = self.read(identity)
-                tasks.append({"id": identity, "name": task["name"], "updated": task["updated"],
-                              "phase": (task.get("text") or {}).get("phase", "draft"), "warning": warning})
+                tasks.append({"id": identity, "name": task["name"], "kind": task["kind"], "updated": task["updated"],
+                              "phase": (task.get("text") or {}).get("phase", (task.get("document") or {}).get("phase", "draft")), "warning": warning})
             except CoreError as exc: errors.append(f"{identity}：{exc}")
         return sorted(tasks, key=lambda item: item["updated"], reverse=True), errors
 
@@ -188,9 +243,11 @@ class TaskStore:
                 asset = directory / name
                 if not asset.exists() and not is_link(asset):
                     metadata = task["asset"]
-                    if asset_data is None or len(asset_data) != metadata["byteCount"] or sha(asset_data) != metadata["fingerprint"]:
+                    if isinstance(asset_data, Path) and task["kind"] == "文档":
+                        atomic_copy(asset_data, asset, metadata["byteCount"], metadata["fingerprint"])
+                    elif asset_data is None or len(asset_data) != metadata["byteCount"] or sha(asset_data) != metadata["fingerprint"]:
                         raise CoreError("缺少匹配的封存源副本。", "source_mismatch")
-                    self.write(asset_data, asset)
+                    else: self.write(asset_data, asset)
                 self.verify_asset(task, directory)
             if existing is not None:
                 self.write(existing, directory / "previous.json")
@@ -219,7 +276,9 @@ class TaskStore:
                     if (source / name).exists():
                         atomic_write(safe_file(source / name), temp / name)
                 if asset_data is not None:
-                    atomic_write(asset_data, temp / self.asset_name(task))
+                    if isinstance(asset_data, Path):
+                        atomic_copy(asset_data, temp / self.asset_name(task), task["asset"]["byteCount"], task["asset"]["fingerprint"])
+                    else: atomic_write(asset_data, temp / self.asset_name(task))
                 os.rename(temp, target)
             finally:
                 if temp.exists(): shutil.rmtree(temp)

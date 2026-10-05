@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "producer": "production Swift TaskRecoveryStore / JSONOutput",
+  "origin": "self-authored synthetic compatibility fixtures; no user data",
+  "files": {
+    "README.md": {
+      "bytes": 738,
+      "sha256": "d4e33e10e7b73f32c6569a6434998644d9033a6f71bf02c6db77cc2914f643fd"
+    },
+    "legacy/33333333-4444-4555-8666-777777777777/current.json": {
+      "bytes": 7691,
+      "sha256": "06e2c4c34491b1b1ac4e720751af083b6a01947f543b9d6d80563447c3cc2407"
+    },
+    "legacy/33333333-4444-4555-8666-777777777777/previous.json": {
+      "bytes": 7691,
+      "sha256": "75f1dc43202f74d410e0814d8c5988abd21c2b045ba8ee48ad9f0c7761d07762"
+    },
+    "legacy/44444444-5555-4666-8777-888888888888/current.json": {
+      "bytes": 9839,
+      "sha256": "48fa295f462c6ccc4e91d3d0b2b180b598fbe54003c4a8fc79da943ef944340a"
+    },
+    "legacy/44444444-5555-4666-8777-888888888888/previous.json": {
+      "bytes": 9839,
+      "sha256": "3bf16279536c012ae402d82120d714036f767a89df19455144402e1abb953865"
+    },
+    "source-bytes.json": {
+      "bytes": 3080,
+      "sha256": "cb66b371a6cf4a6aa8b886cc44b22b6456c0c7615beefd3ae94a27181795833a"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 import json
 import uuid
 
-PROTOCOL = {"major": 1, "minor": 1}
+PROTOCOL = {"major": 1, "minor": 2}
 MAX_FRAME_BYTES = 65536
 STARTUP_TIMEOUT_MS = 30000
 SHUTDOWN_TIMEOUT_MS = 5000

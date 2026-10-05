@@ -20,7 +20,7 @@ class WorkerClient(QObject):
     snapshot = Signal(dict)
 
     def __init__(self, parent=None, launch_path=None, startup_timeout_ms=STARTUP_TIMEOUT_MS,
-                 task_root=None, boundary_helper=None, endpoint=None):
+                 task_root=None, boundary_helper=None, endpoint=None, pdf_helper=None, pdf_library=None):
         super().__init__(parent)
         self.launch_path = Path(launch_path or Path(__file__).resolve().parents[1] / "launch.py")
         self.process = None
@@ -39,6 +39,8 @@ class WorkerClient(QObject):
         self.timeout_ms = startup_timeout_ms
         self.task_root, self.boundary_helper = task_root, boundary_helper
         self.endpoint = endpoint
+        self.pdf_helper, self.pdf_library = pdf_helper, pdf_library
+        self.current_task = None
         self.transfer = None
         self.operation_kind = None
         self.heartbeat = QTimer(self); self.heartbeat.setInterval(5000)
@@ -56,6 +58,7 @@ class WorkerClient(QObject):
         self.buffer.clear(); self.stderr.clear(); self.requests.clear()
         self.operation = self.terminal = self.failure = self.diagnostic = self.transfer = None
         self.ready_confirmed = self.shutdown_confirmed = False
+        self.current_task = None
         process = QProcess(self); self.process = process
         environment = QProcessEnvironment()
         for key, value in owned_environment().items():
@@ -67,6 +70,8 @@ class WorkerClient(QObject):
         if self.task_root: arguments += ["--task-root", str(self.task_root)]
         if self.boundary_helper: arguments += ["--boundary-helper", str(self.boundary_helper)]
         if self.endpoint: arguments += ["--endpoint", self.endpoint]
+        if self.pdf_helper: arguments += ["--pdf-helper", str(self.pdf_helper)]
+        if self.pdf_library: arguments += ["--pdf-library", str(self.pdf_library)]
         process.setArguments(arguments)
         process.started.connect(lambda: self.send("hello") if process is self.process else None)
         process.readyReadStandardOutput.connect(lambda: self.read_output(process))
@@ -79,6 +84,9 @@ class WorkerClient(QObject):
     def send(self, kind, **fields):
         if not self.process or self.process.state() != QProcess.Running:
             return None
+        if kind in ("task.save", "task.export") and self.current_task:
+            fields.setdefault("task_id", self.current_task["id"])
+            fields.setdefault("revision", self.current_task["revision"])
         message = request(kind, self.session_id, **fields)
         if len(self.requests) >= 512:
             self.fail("request_limit"); return None
@@ -145,12 +153,12 @@ class WorkerClient(QObject):
             expected = self.operation or ((self.terminal["operation_id"], self.terminal["lease_id"]) if self.terminal else None)
             if expected != (event.get("operation_id"), event.get("lease_id")):
                 raise ProtocolError("operation_or_lease_mismatch")
-        elif kind == "task.done" and request_kind.startswith("task."):
+        elif kind == "task.done" and request_kind.startswith(("task.", "document.")):
             if self.transfer: raise ProtocolError("incomplete_snapshot_transfer")
         elif kind == "task.exported" and request_kind == "task.export":
             pass
         elif kind == "error":
-            if request_kind in ("task.start", "service.check"):
+            if request_kind in ("task.start", "service.check", "document.select", "document.extract", "document.render"):
                 self.operation = None; self.heartbeat.stop(); self.set_state("ready")
         else:
             raise ProtocolError("unexpected_event")
@@ -187,17 +195,21 @@ class WorkerClient(QObject):
             from translator_core.contracts import strict_json
             snapshot = strict_json(raw)
             if not isinstance(snapshot, dict): raise ProtocolError("invalid_snapshot")
+            if "task" in snapshot: self.current_task = snapshot["task"]
             self.transfer = None; self.snapshot.emit(snapshot)
         else: raise ProtocolError("unexpected_snapshot_event")
 
     def start_operation(self, kind, **fields):
         if self.state != "ready": return False
+        if kind in ("task.start", "document.extract", "document.render") and self.current_task:
+            fields.setdefault("task_id", self.current_task["id"])
+            fields.setdefault("revision", self.current_task["revision"])
         self.terminal = None; self.operation_kind = kind
         self.operation = (str(uuid.uuid4()), str(uuid.uuid4()))
         self.set_state("running")
-        self.send(kind, operation_id=self.operation[0], lease_id=self.operation[1], lease_ms=20000, **fields)
+        request_id = self.send(kind, operation_id=self.operation[0], lease_id=self.operation[1], lease_ms=20000, **fields)
         self.heartbeat.start()
-        return True
+        return request_id
 
     def renew_lease(self):
         if self.state == "running" and self.operation:

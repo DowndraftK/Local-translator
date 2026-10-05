@@ -102,6 +102,15 @@ class TextTasks:
             if self.task is None: raise CoreError("请先打开任务。")
             return bilingual_text(deepcopy(self.task))
 
+    def _source_key(self):
+        return self.task["input"]
+
+    def _plan(self, cancel):
+        return split(self.task["input"], self.boundaries, cancel)
+
+    def _before_run(self):
+        pass
+
     def run(self, generation, cancel, changed, started=lambda: None):
         with self.lock:
             self.idle()
@@ -109,22 +118,24 @@ class TextTasks:
             if self.save_blocked: raise CoreError("保存/源副本受阻，禁止继续；可完整导出后另建任务。", "save_blocked")
             validate_recipe(self.task["configuration"])
             if (not (self.task.get("text") or {}).get("segments") and
+                    not (self.task.get("document") or {}).get("segments") and
                     self.task["configuration"]["splitterVersion"] != getattr(
                         self.boundaries, "splitter_version", "natural-language-utf8-v1")):
                 raise CoreError("未分段任务需要原分句适配器；请在原平台继续或另建任务。", "boundary_adapter_mismatch")
             self.store.verify_asset(self.task, self.store.directory(self.task["id"]))
+            self._before_run()
             self.active = (generation, cancel)
             self.engine = self.engine_factory(cancel=cancel)
             recipe = deepcopy(self.task["configuration"])
             if not self.task.get("text"):
-                self.task["text"] = dict(id=self.task["id"], source=self.task["input"], model=recipe["model"],
+                self.task["text"] = dict(id=self.task["id"], source=self._source_key(), model=recipe["model"],
                                          direction=recipe["direction"], phase="preparing", segments=[])
             job = self.task["text"]
             job.pop("error", None)
             started()
         try:
             if not job["segments"]:
-                parts = split(self.task["input"], self.boundaries, cancel)
+                parts = self._plan(cancel)
                 with self.lock:
                     self._current(generation); job["segments"] = parts
             with self.lock:

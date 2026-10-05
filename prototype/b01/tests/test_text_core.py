@@ -466,13 +466,38 @@ class WorkerTextCase(unittest.TestCase):
         self.send("task.create", input_file="../source.txt", byte_count=10, sha256="0" * 64, direction="en-zh")
         self.assertEqual(self.next("error")["error"]["code"], "unsafe_path")
         self.send("task.list"); self.assertEqual(self.snapshot()["listing"], []); self.next("task.done")
+    def test_document_utf8_protocol_revision_and_read_only_export(self):
+        source=Path(self.temp.name)/"unicode.txt"; body="Repeat. Repeat.\r\n中文 e\u0301\nEND-DOCUMENT"
+        source.write_bytes(b"\xef\xbb\xbf"+body.encode())
+        fields=dict(operation_id=str(uuid.uuid4()),lease_id=str(uuid.uuid4()),lease_ms=20000)
+        self.send("document.select",source_path=str(source),**fields)
+        terminal=self.next("operation.finished");self.assertEqual(terminal["status"],"completed")
+        selection=terminal["result"]["detail"]
+        self.send("document.create",selection_token=selection["token"],first=1,last=1,direction="en-zh")
+        task=self.snapshot()["task"];self.next("task.done")
+        current=self.root/task["id"]/"current.json";before=current.read_bytes()
+        for kind in ("document.extract","task.start","task.save","task.export"):
+            self.send(kind,task_id=task["id"],revision=task["revision"]+1,**fields)
+            self.assertEqual(self.next("error")["error"]["code"],"request_revision_mismatch")
+        self.assertEqual(current.read_bytes(),before)
+        self.send("document.extract",task_id=task["id"],revision=task["revision"],**fields)
+        while True:
+            event=self.next()
+            if event["type"]=="operation.finished":break
+        self.assertEqual(event["status"],"completed")
+        saved=decode_snapshot(current.read_bytes());self.assertEqual(saved["document"]["pages"][0]["text"],body)
+        before=current.read_bytes()
+        self.send("task.export",task_id=saved["id"],revision=saved["revision"])
+        exported=self.next("task.exported");raw=(self.root/"exports"/exported["filename"]).read_bytes()
+        self.assertEqual(sha(raw),exported["sha256"]);self.assertIn(body,raw.decode());self.assertEqual(current.read_bytes(),before)
+        self.assertFalse(self.api.calls)
     def test_text_lease_expires_and_persists_before_terminal(self):
         raw = b"Local test source."; name = uuid.uuid4().hex + ".txt"
         (self.root / "incoming" / name).write_bytes(raw)
         self.send("task.create", input_file=name, byte_count=len(raw), sha256=sha(raw), direction="en-zh")
         task = self.snapshot()["task"]; self.next("task.done")
         self.api.mode = "headers"
-        self.send("task.start", operation_id=str(uuid.uuid4()), lease_id=str(uuid.uuid4()), lease_ms=200)
+        self.send("task.start", task_id=task["id"], revision=task["revision"], operation_id=str(uuid.uuid4()), lease_id=str(uuid.uuid4()), lease_ms=200)
         self.next("operation.started")
         self.assertTrue(self.api.entered.wait(2))
         terminal = self.next("operation.finished")

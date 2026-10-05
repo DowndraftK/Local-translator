@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QListW
 from . import PRODUCT_VERSION, PREVIEW_ID
 from .client import WorkerClient
 from .text_page import TextPage
+from .document_page import DocumentPage
+from .protocol import PROTOCOL
 
 LABELS = {"connecting": "正在等待本地工作进程确认启动…", "ready": "本地工作进程已就绪",
           "running": "正在执行本次操作", "cancelling": "正在安全取消，等待尾部确认…",
@@ -31,7 +33,7 @@ FEATURES = [("diagnostics", "能力与诊断", "B01"), ("lifecycle_probe", "启�
 
 
 class PreviewWindow(QMainWindow):
-    def __init__(self, evidence_path=None, screenshot_path=None, task_root=None, boundary_helper=None):
+    def __init__(self, evidence_path=None, screenshot_path=None, task_root=None, boundary_helper=None, pdf_helper=None, pdf_library=None):
         super().__init__()
         self.evidence_path, self.screenshot_path = evidence_path, screenshot_path
         self.started_monotonic = time.monotonic()
@@ -52,28 +54,32 @@ class PreviewWindow(QMainWindow):
         boundary_helper = Path(boundary_helper or package / "shared/platform/macos/text-boundaries")
         if not boundary_helper.is_file() and sys.platform == "darwin":
             boundary_helper = project / "artifacts/b02-20261004/bin/text-boundaries"
-        self.client = WorkerClient(self, task_root=task_root, boundary_helper=boundary_helper)
+        pdf_helper = Path(pdf_helper or package / "shared/platform/macos/pdf-facts")
+        if not pdf_helper.is_file() and sys.platform == "darwin": pdf_helper = project / "artifacts/b03-20261005/pdf-facts"
+        pdf_library = Path(pdf_library or package / "vendor/pdfium")
+        self.client = WorkerClient(self, task_root=task_root.absolute(), boundary_helper=boundary_helper,
+                                   pdf_helper=pdf_helper, pdf_library=pdf_library)
         self.evidence["preview_task_root"] = str(task_root)
-        self.setWindowTitle("本地翻译器 · B02 文字预览")
+        self.setWindowTitle("本地翻译器 · B03 文档预览")
         self.resize(1100, 760); self.setMinimumSize(860, 600)
         root = QWidget(); self.setCentralWidget(root)
         layout = QHBoxLayout(root); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
         sidebar = QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(245)
         side = QVBoxLayout(sidebar); side.setContentsMargins(24, 30, 20, 24)
         brand = QLabel("本地翻译器"); brand.setObjectName("brand"); side.addWidget(brand)
-        small = QLabel("共享桌面界面 · B02"); small.setObjectName("muted"); side.addWidget(small)
+        small = QLabel("共享桌面界面 · B03"); small.setObjectName("muted"); side.addWidget(small)
         self.nav = QListWidget(); self.nav.setObjectName("navigation")
         self.nav.addItems(["连接与能力", "文字翻译", "文档与图片", "录音与字幕", "资源与安装"])
         side.addWidget(self.nav); side.addStretch()
-        foot = QLabel("0.2.11 · 文字预览\n本次实施 B02\n旧 Mac 应用独立保留")
+        foot = QLabel("0.2.11 · 开发预览\n本次实施 B03\n旧 Mac 应用独立保留")
         foot.setWordWrap(True); foot.setObjectName("muted"); side.addWidget(foot)
         layout.addWidget(sidebar)
         main = QVBoxLayout(); main.setContentsMargins(30, 28, 30, 24); main.setSpacing(14)
         layout.addLayout(main)
         title = QLabel("连接与能力"); title.setObjectName("title"); main.addWidget(title)
-        note = QLabel("文字页已接入保存、主动翻译和恢复。预览任务与旧 Mac 应用独立保存。")
+        note = QLabel("文字、PDF文字层与UTF-8 TXT可独立保存和回看来源。打开不自动推理。")
         note.setWordWrap(True); note.setObjectName("muted"); main.addWidget(note)
-        identity = QLabel(f"候选 {self.identity['build_id']}  ·  协议 1.1  ·  {platform.system()} / {platform.machine()}")
+        identity = QLabel(f"候选 {self.identity['build_id']}  ·  协议 {PROTOCOL['major']}.{PROTOCOL['minor']}  ·  {platform.system()} / {platform.machine()}")
         identity.setObjectName("muted"); main.addWidget(identity)
         self.stack = QStackedWidget(); main.addWidget(self.stack, 1)
         page = QWidget(); box = QVBoxLayout(page); box.setContentsMargins(0, 0, 0, 0); box.setSpacing(12)
@@ -104,8 +110,8 @@ class PreviewWindow(QMainWindow):
         self.timeline.document().setMaximumBlockCount(80); box.addWidget(self.timeline)
         self.stack.addWidget(page)
         self.text_page = TextPage(self.client, task_root, self); self.stack.addWidget(self.text_page)
-        for label, batch in [("文档与图片", "B03 / B04"),
-                             ("录音与字幕", "B05—B07"), ("资源与安装", "B08—B11")]:
+        self.document_page = DocumentPage(self.client, task_root, self); self.stack.addWidget(self.document_page)
+        for label, batch in [("录音与字幕", "B05—B07"), ("资源与安装", "B08—B11")]:
             placeholder = QWidget(); column = QVBoxLayout(placeholder)
             column.addStretch(); heading = QLabel(label); heading.setObjectName("title"); heading.setAlignment(Qt.AlignCenter)
             column.addWidget(heading)
@@ -152,7 +158,7 @@ class PreviewWindow(QMainWindow):
             self.timeline.appendPlainText("本地工作进程已真实确认启动；未加载模型或打开旧任务。")
             for index, (key, _, _) in enumerate(FEATURES):
                 state = event["diagnostics"]["capabilities"].get(key)
-                self.table.item(index, 1).setText("已就绪" if state == "ready" else "尚未实现")
+                self.table.item(index, 1).setText("已就绪" if state == "ready" else "TXT就绪，PDF适配器缺失" if state == "txt_ready_pdf_adapter_missing" else "尚未实现")
             if self.screenshot_path:
                 QTimer.singleShot(300, self.capture_window)
         elif kind == "progress":
@@ -226,10 +232,12 @@ def main(argv=None):
     parser.add_argument("--screenshot")
     parser.add_argument("--task-root")
     parser.add_argument("--boundary-helper")
+    parser.add_argument("--pdf-helper")
+    parser.add_argument("--pdf-library")
     args = parser.parse_args(argv)
     app = QApplication([]); app.setApplicationName("本地翻译器 B02预览")
     app.setStyle("Fusion"); app.setStyleSheet(STYLE)
-    window = PreviewWindow(args.evidence, args.screenshot, args.task_root, args.boundary_helper); window.show()
+    window = PreviewWindow(args.evidence, args.screenshot, args.task_root, args.boundary_helper, args.pdf_helper, args.pdf_library); window.show()
     code = app.exec()
     # Destroy the widget/AX tree while QApplication and its native accessibility
     # bridge still exist, rather than during Python interpreter finalization.

@@ -11,10 +11,12 @@ from translator_core.store import atomic_write, safe_file
 
 
 class TextPage(QWidget):
+    task_kind = "文字"
     def __init__(self, client, task_root, parent=None):
         super().__init__(parent)
         self.client, self.root = client, Path(task_root)
         self.saved = None; self.pending = False; self.pending_kind = None; self.export_target = None
+        self.pending_request = self.export_request = self.operation_request = None
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(10)
         actions = QHBoxLayout()
         self.new = QPushButton("新建文字任务")
@@ -55,9 +57,9 @@ class TextPage(QWidget):
         self.refresh.clicked.connect(lambda: self.send("task.list"))
         self.open.clicked.connect(self.open_task); self.listing.itemDoubleClicked.connect(lambda _: self.open_task())
         self.import_button.clicked.connect(self.import_task)
-        self.start.clicked.connect(lambda: self.client.start_operation("task.start"))
+        self.start.clicked.connect(lambda: self.operate("task.start"))
         self.cancel_button.clicked.connect(self.client.cancel)
-        self.check.clicked.connect(lambda: self.client.start_operation("service.check", direction=self.direction.currentData()))
+        self.check.clicked.connect(lambda: self.operate("service.check", direction=self.direction.currentData()))
         self.export_button.clicked.connect(self.export)
         self.client.changed.connect(self.update_controls)
         self.client.snapshot.connect(self.receive_snapshot); self.client.event.connect(self.receive_event)
@@ -78,7 +80,13 @@ class TextPage(QWidget):
     def send(self, kind, **fields):
         if self.client.state != "ready" or self.pending: return
         self.pending = True; self.pending_kind = kind; self.update_controls(self.client.state)
-        self.client.send(kind, **fields)
+        self.pending_request = self.client.send(kind, **fields)
+        if self.pending_request is None:
+            self.pending = False; self.update_controls(self.client.state)
+
+    def operate(self, kind, **fields):
+        self.operation_request = self.client.start_operation(kind, **fields)
+        return self.operation_request
 
     def new_task(self):
         self.saved = None; self.input.clear(); self.output.clear()
@@ -107,20 +115,23 @@ class TextPage(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, "保存完整双语TXT", "文字翻译-双语.txt", "UTF-8文字 (*.txt)")
         if not path: return
         self.export_target = Path(path)
-        self.client.send("task.export")
+        self.export_request = self.client.send("task.export")
 
     def receive_snapshot(self, snapshot):
         if "listing" in snapshot:
             selected = self.saved.get("task", {}).get("id") if self.saved else None
             self.listing.clear()
             for task in snapshot["listing"]:
+                if task.get("kind", "文字") != self.task_kind: continue
                 item = QListWidgetItem(task["name"] + "\n" + task["phase"])
                 item.setData(Qt.UserRole, task["id"]); self.listing.addItem(item)
                 if task["id"] == selected: self.listing.setCurrentItem(item)
             if snapshot.get("errors"): self.status.setText("\n".join(snapshot["errors"]))
             return
-        self.saved = snapshot
         task = snapshot.get("task")
+        if task and task["kind"] != self.task_kind:
+            self.saved = None; self.update_controls(self.client.state); return
+        self.saved = snapshot
         if not task: return
         self.input.setPlainText(task["input"])
         self.direction.setCurrentIndex(0 if task["configuration"]["direction"] == "en-zh" else 1)
@@ -141,14 +152,18 @@ class TextPage(QWidget):
         kind = event["type"]
         if kind == "ready": self.send("task.list")
         elif kind in ("task.done", "error"):
+            if event["request_id"] not in (self.pending_request, self.export_request, self.operation_request): return
             completed_kind = self.pending_kind
-            self.pending = False
+            if event["request_id"] == self.pending_request:
+                self.pending = False; self.pending_request = self.pending_kind = None
             if kind == "error":
                 self.status.setText(event["error"].get("message", event["error"]["code"])); self.export_target = None
             self.update_controls(self.client.state)
-            if kind == "task.done" and completed_kind in ("task.create", "task.import", "task.save"):
+            if kind == "task.done" and completed_kind in ("task.create", "task.import", "task.save", "document.create"):
                 self.send("task.list")
         elif kind == "operation.finished":
+            if event["request_id"] != self.operation_request: return
+            self.operation_request = None
             detail = event.get("result", {}).get("detail")
             if event.get("result", {}).get("kind") == "service-diagnostic":
                 if detail and "version" in detail:
@@ -158,6 +173,7 @@ class TextPage(QWidget):
             if event["status"] == "lease_expired": self.status.setText("连接租约到期，已停止并保存确认结果；等待主动继续。")
             self.update_controls(self.client.state)
         elif kind == "task.exported":
+            if event["request_id"] != self.export_request: return
             try:
                 name = event["filename"]
                 if len(name) != 36 or not name.endswith(".txt") or any(c not in "0123456789abcdef" for c in name[:-4]):
@@ -169,4 +185,4 @@ class TextPage(QWidget):
                 atomic_write(raw, self.export_target); source.unlink()
                 self.status.setText("完整双语TXT已导出：" + str(self.export_target))
             except (OSError, ValueError) as exc: self.status.setText("导出未完成：" + str(exc))
-            finally: self.export_target = None
+            finally: self.export_target = self.export_request = None

@@ -11,7 +11,7 @@ parser.add_argument('--evidence-root',type=Path,required=True)
 args=parser.parse_args()
 P=Path(__file__).resolve().parents[3]
 C=args.candidate.resolve()
-PACKAGE=C/('B01' if sys.platform=='win32' else '本地翻译器 B02预览.app/Contents/Resources/B01')
+PACKAGE=C/'B01' if sys.platform=='win32' else next(C.glob('*.app'))/'Contents/Resources/B01'
 ROOT=args.task_root.resolve()
 EVIDENCE=args.evidence_root.resolve()
 if ROOT.exists(): raise ValueError('Use a new acceptance task root; original tasks must stay intact')
@@ -56,7 +56,7 @@ class Peer:
   self.send('task.create',input_file=name,sha256=sha(raw),byte_count=len(raw),direction=direction);self.until('task.done');return self.snapshots[-1]['task']
  def run(self,cancel_after_prefix=False):
   operation=str(uuid.uuid4());lease=str(uuid.uuid4());start=time.monotonic();next_renew=start+4;cancel_at=None;sent=False
-  self.send('task.start',operation_id=operation,lease_id=lease,lease_ms=20000)
+  self.send('task.start',task_id=self.snapshots[-1]['task']['id'],revision=self.snapshots[-1]['task']['revision'],operation_id=operation,lease_id=lease,lease_ms=20000)
   while time.monotonic()-start<600:
    now=time.monotonic()
    if not sent and now>=next_renew:self.send('lease.renew',operation_id=operation,lease_id=lease);next_renew=now+4
@@ -70,7 +70,7 @@ class Peer:
     assert e['tail_drained'];return e,self.snapshots[-1]['task'],time.monotonic()-start,sent
   raise TimeoutError('text run')
  def export(self,task,label):
-  self.send('task.export');e=self.until('task.exported');raw=(ROOT/'exports'/e['filename']).read_bytes();assert sha(raw)==e['sha256'] and len(raw)==e['byte_count']
+  self.send('task.export',task_id=task['id'],revision=task['revision']);e=self.until('task.exported');raw=(ROOT/'exports'/e['filename']).read_bytes();assert sha(raw)==e['sha256'] and len(raw)==e['byte_count']
   value=raw.decode()
   for part in task['text']['segments']:
    assert part['source'] in value

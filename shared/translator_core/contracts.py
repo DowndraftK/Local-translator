@@ -119,8 +119,6 @@ def validate_task(task):
     if not isinstance(task, dict) or type(task.get("revision")) is not int or not 0 < task["revision"] < 2**64:
         raise CoreError("任务序号无效。")
     task_id(task.get("id"))
-    if task.get("kind") != "文字" or task.get("document") is not None:
-        raise CoreError("B02只接文字任务，文档请继续使用旧App。", "document_not_in_b02")
     source, recipe, text = task.get("input"), task.get("configuration"), task.get("text")
     if not isinstance(source, str) or len(source.encode()) > MAX_INPUT_BYTES or not isinstance(recipe, dict):
         raise CoreError("文字任务超出预览容量或字段无效。")
@@ -130,6 +128,12 @@ def validate_task(task):
     if (not isinstance(recipe.get("model"), str) or recipe.get("direction") not in ("en-zh", "zh-en") or
             not isinstance(recipe.get("options"), dict) or not isinstance(recipe.get("userPrefix"), str)):
         raise CoreError("保存配置缺少必需字段。")
+    if task.get("kind") == "文档":
+        from .documents import validate_document_task
+        validate_document_task(task)
+        return
+    if task.get("kind") != "文字" or task.get("document") is not None:
+        raise CoreError("任务类型与内容不匹配。", "task_kind_mismatch")
     if text is None:
         return
     if (not isinstance(text, dict) or text.get("source") != source or text.get("model") != recipe.get("model") or
@@ -203,10 +207,20 @@ def recover_in_memory(task):
         for part in text["segments"]:
             if part["state"] == "processing":
                 part["state"] = "stopped"
+    document = task.get("document")
+    if document:
+        for page in document["pages"]:
+            if page["state"] in ("pending", "recognizing"):
+                page["state"] = "stopped"
+        if any(p["state"] == "stopped" for p in document["pages"]):
+            document["phase"] = "提取中断，等待主动继续"
     return task
 
 
 def bilingual_text(task):
+    if task.get("kind") == "文档":
+        from .documents import document_text
+        return document_text(task)
     recipe, source = task["configuration"], task["input"]
     text = task.get("text") or {"phase": "preparing", "segments": []}
     parts = text["segments"]
