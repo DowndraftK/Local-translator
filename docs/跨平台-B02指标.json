@@ -1,0 +1,338 @@
+{
+  "schema": 1,
+  "batch": "B02",
+  "date": "2026-10-05",
+  "status": "partial_current_native_gui_evidence_pending",
+  "next_batches_started": false,
+  "product_version": "0.2.11",
+  "preview_id": "b02-preview.4",
+  "shared_core": "b02-text.4",
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "source": {
+    "branch": "codex/cross-platform-b01",
+    "candidate_commit": "0d90ee61f298e957df3bcad5a3afee26b05612a4",
+    "both_candidates_same_commit": true,
+    "source_files": 31,
+    "normalized_source_hash_maps_equal": true,
+    "final_handoff_identity": "actual final HEAD, bundle hash and bytes are recorded in ignored source-handoff-manifest.json",
+    "candidate_package_source_hashes_unchanged_at_delivery_audit": true,
+    "documentation_only_after_candidate_build": true
+  },
+  "candidates": {
+    "mac": {
+      "build_id": "macos-arm64-build58",
+      "directory": "dist/B02-20261005-mac-candidate58",
+      "native_platform": "darwin",
+      "strict_deep_signature_verified": true,
+      "app_files": 36,
+      "app_file_bytes": 323641,
+      "standalone_runtime": false
+    },
+    "windows": {
+      "build_id": "windows-x64-b02-20261005T053959190812Z",
+      "directory": "dist/B02-20261005-windows-candidate2",
+      "native_platform": "win32",
+      "entry": "Launch-B02.cmd",
+      "standalone_runtime": false,
+      "installer_tested": false,
+      "developer_candidate_files": 54,
+      "developer_candidate_file_bytes": 571156,
+      "size_scope": "Source, native bytecode and identity files; excludes controlled development runtime and models"
+    }
+  },
+  "checks": {
+    "mac_shared": {
+      "registered": 58,
+      "passed": 57,
+      "skipped": 1,
+      "seconds": 43.701,
+      "skip_reasons": [
+        "Native NTFS junction check applies to Windows only"
+      ]
+    },
+    "windows_shared": {
+      "registered": 58,
+      "passed": 56,
+      "skipped": 2,
+      "seconds": 79.746,
+      "native_junction_executed_and_passed": true,
+      "skip_reasons": [
+        "Frozen NLTokenizer boundary evidence applies to Mac only",
+        "Current Windows user cannot create file symlinks; real junction checked separately"
+      ]
+    },
+    "swift_full": {
+      "registered": 72,
+      "executed_passed": 71,
+      "skipped": 1,
+      "seconds": 0.439,
+      "skip_reason": "Opt-in OCR"
+    },
+    "production_python_inherited": {
+      "passed": 88,
+      "seconds": 2.65,
+      "rerun_after_resume": false,
+      "reason": "Production execution files unchanged"
+    },
+    "swift_readonly_real_snapshot_audit": {
+      "selected_test_passed": 1,
+      "snapshot_count": 8,
+      "mac_snapshots": 4,
+      "windows_snapshots": 4,
+      "related_files_checked": 38,
+      "bytes_unchanged": true,
+      "new_test_count_is_not_snapshot_count": true
+    }
+  },
+  "real_text": {
+    "mac_current_candidate": {
+      "all_passed": true,
+      "confirmed_new_translation_segments": 5,
+      "short_cases": [
+        {
+          "name": "english-short",
+          "direction": "en-zh",
+          "segments": 1,
+          "elapsed_seconds": 1.907
+        },
+        {
+          "name": "chinese-short",
+          "direction": "zh-en",
+          "segments": 1,
+          "elapsed_seconds": 0.665
+        }
+      ],
+      "long": {
+        "source_utf8_bytes": 4080,
+        "segments": 2,
+        "cancel_status": "cancelled",
+        "saved_prefix_segments": 1,
+        "cancel_after_second_processing_seconds": 0.75,
+        "reopen_no_write": true,
+        "resume_completed": true,
+        "plan_preserved": true,
+        "successful_prefix_byte_identical": true,
+        "cancel_flow_elapsed_seconds": 16.643,
+        "resume_elapsed_seconds": 15.498,
+        "full_export_bytes": 8925
+      },
+      "legacy_v1": {
+        "completed": true,
+        "old_source_unchanged": true,
+        "prefix_byte_identical": true,
+        "configuration_byte_identical": true
+      },
+      "worker_os_exit_codes": [
+        0,
+        0
+      ],
+      "gui_test": false,
+      "quality_comparison": false
+    },
+    "windows_current_candidate": {
+      "all_passed": true,
+      "confirmed_new_translation_segments": 5,
+      "short_cases": [
+        {
+          "name": "english-short",
+          "direction": "en-zh",
+          "segments": 1,
+          "elapsed_seconds": 12.922
+        },
+        {
+          "name": "chinese-short",
+          "direction": "zh-en",
+          "segments": 1,
+          "elapsed_seconds": 2.328
+        }
+      ],
+      "long": {
+        "source_utf8_bytes": 4080,
+        "segments": 2,
+        "cancel_status": "cancelled",
+        "saved_prefix_segments": 1,
+        "cancel_after_second_processing_seconds": 0.75,
+        "reopen_no_write": true,
+        "resume_completed": true,
+        "plan_preserved": true,
+        "successful_prefix_byte_identical": true,
+        "cancel_flow_elapsed_seconds": 55.094,
+        "resume_elapsed_seconds": 52.031,
+        "full_export_bytes": 8925
+      },
+      "legacy_v1": {
+        "completed": true,
+        "old_source_unchanged": true,
+        "prefix_byte_identical": true,
+        "configuration_byte_identical": true
+      },
+      "worker_os_exit_codes": [
+        0,
+        0
+      ],
+      "gui_test": false,
+      "quality_comparison": false
+    },
+    "timing_scope": "Finite flow durations with different service/model residency; not a controlled performance comparison"
+  },
+  "gui": {
+    "mac_current_candidate": {
+      "verified": false,
+      "reason": "Mac desktop remains locked; user permission reply is not startup proof",
+      "actual_ui_exit_codes": null
+    },
+    "windows_current_candidate": {
+      "verified": false,
+      "reason": "Manual logged-in desktop check entry prepared; no user report or desktop event evidence yet",
+      "actual_ui_exit_codes": null
+    },
+    "historical_mac_build51": {
+      "real_ui_sessions": 2,
+      "actual_ui_exit_codes": [
+        0,
+        0
+      ],
+      "applies_to_current_candidate": false
+    }
+  },
+  "dependencies": {
+    "python_version": "3.12.14",
+    "mac_base_build": "20260825",
+    "windows_python_archive": {
+      "provider": "astral-sh/python-build-standalone",
+      "build": "20260825",
+      "architecture": "x86_64-pc-windows-msvc",
+      "filename": "cpython-3.12.14+20260825-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260825/cpython-3.12.14%2B20260825-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "bytes": 21980002,
+      "sha256": "8e6aad12ef6fc9685e67ce66253f8f72d6e8fa02cb7187e5850bd4db5ecd9e2a",
+      "license_family": "PSF-2.0; bundled component license inventory remains separate"
+    },
+    "qt_version": "6.10.2",
+    "packages": {
+      "PySide6-Essentials": "6.10.2",
+      "shiboken6": "6.10.2"
+    },
+    "lock_sha256": "87e63a3a81f32f76ebacf199fe5b6f2951ccd963b71c18c317dede3a3af94a67",
+    "windows_wheel_bytes": 75768542,
+    "windows_measured_file_bytes": {
+      "base_python": 63483892,
+      "qt_venv_including_development_tools": 220142739
+    },
+    "windows_wheel_license_texts": "Each wheel contains LicenseRef-Qt-Commercial.txt; LGPL/GPL metadata does not close actual module/source/relink obligations",
+    "distribution_status": "personal-controlled-development-preview; B09/B10 pending"
+  },
+  "windows_hardware": {
+    "os": "Windows 11 Pro x64",
+    "build": 26200,
+    "cpu": "AMD Ryzen 7 8845H",
+    "cores": 8,
+    "logical_processors": 16,
+    "ram_bytes": 33565511680,
+    "physical_disk_bytes": [
+      1000202273280,
+      1024203640320
+    ],
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "dedicated_vram_mib": 8188,
+    "driver": "595.79",
+    "initial_free_volume_bytes": {
+      "C": 637606400000,
+      "D": 395100012544
+    },
+    "after_preparation_free_volume_sample_bytes": {
+      "C": 622888677376,
+      "D": 395100028928
+    },
+    "cuda_asr_verified": false
+  },
+  "resources": {
+    "internet_model_downloads": 0,
+    "user_authorized_existing_model_copy": true,
+    "copied_files_verified_on_windows": 6,
+    "copied_total_bytes": 9890458250,
+    "windows_location": "Separate resource root under the user-confirmed Downloads directory",
+    "model_digests": {
+      "hy-mt2:7b-q8": "202e0ccbae412a107d24c32bc08d7674c579c459a5942e7ed42e5fff631630d9",
+      "hy-mt2:1.8b-q8": "f5ee2ebab8a605d7790eee41a0a34bbc98b4b12792ad7cc9f216dd4949fd7ed1"
+    },
+    "ollama": {
+      "version": "0.35.0",
+      "windows_official_url": "https://github.com/ollama/ollama/releases/download/v0.35.0/ollama-windows-amd64.zip",
+      "archive_bytes": 1461196158,
+      "archive_sha256": "d6f7d3dd4f5d013553a78c1e78b2521fcf41d43dd2863e4596cdc046fe6036db",
+      "exe_sha256": "ecdb9fe1c52a08a0629d8ca658f9577b24f83a1600857fe31646f41b5dec52fc",
+      "authenticode": "Valid / Ollama Inc.",
+      "global_install_or_startup_change": false
+    }
+  },
+  "memory": {
+    "current_candidate_gui_idle_rss": null,
+    "current_candidate_gui_peak": null,
+    "reason": "Current desktop UI runs unavailable; no invented memory or B08 benefit",
+    "windows_final_owned_service_api_sample": {
+      "model": "hy-mt2:1.8b-q8",
+      "size_bytes": 2557770464,
+      "size_vram_bytes": 2557770464,
+      "context_length": 8192,
+      "scope": "Ollama API residency after legacy request, before owned service stop; not OS peak or ASR validation"
+    },
+    "historical_mac51_idle_rss_bytes": {
+      "ui": 229867520,
+      "worker": 27721728,
+      "applies_to_current_candidate": false
+    }
+  },
+  "protection": {
+    "changed": 0,
+    "main_commit": "6376bcfeb5cbc9a3bf4cafb4f0c85283106a9f4d",
+    "main_merged": false,
+    "reset_or_force_push": false,
+    "push_performed": false,
+    "remote_sha_queried": false,
+    "original_apps_environments_models_and_unique_task_preserved": true,
+    "voice_schema3_source_lease_and_128token_unchanged": true,
+    "mac_mlx_mps_fp32_unchanged": true,
+    "preexisting_production_script_experiment_files_rechecked": 95,
+    "file_count_scope": "Preexisting Sources/runtime/scripts/experiments files, excluding README; includes configuration and historical metrics",
+    "preserved_app_strict_signatures_rechecked": 4,
+    "current_app_strict_signature_rechecked": true
+  },
+  "cleanup": {
+    "real_flow_worker_os_exit_codes": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "windows_owned_batch_process_count_at_post_flow_audit": 0,
+    "windows_11434_listener_count_at_post_flow_audit": 0,
+    "codex_app_server_count_at_audit": 3,
+    "sshd_process_count_at_audit": 5,
+    "original_mac_ollama_pid": 1557,
+    "remote_connection_settings_changed": false,
+    "mounts_created": 0,
+    "desktop_check_pending_is_separate_from_post_flow_audit": true,
+    "mac_owned_batch_process_count_at_delivery_audit": 0,
+    "mac_original_ollama_alive_at_delivery_audit": true,
+    "windows_owned_batch_process_count_at_delivery_audit": 0,
+    "windows_11434_listener_count_at_delivery_audit": 0,
+    "windows_desktop_reports_at_delivery_audit": 0
+  },
+  "limitations": [
+    "Current Mac and Windows GUI interaction/actual UI exits unverified",
+    "Developer candidates depend on project-controlled runtimes; not independent installers",
+    "No PDF/OCR/speech/microphone/unload/installer implementation in B02",
+    "No quality tuning, model selection, Office whole-document or classroom long tests",
+    "Actual Qt module/source/relink and later binary distribution requirements pending",
+    "No binary publication"
+  ],
+  "next_required": [
+    "Finish only B02 current Mac GUI after unlock",
+    "Perform current Windows desktop check and verify saved event/process evidence",
+    "Update B02 GUI status before calling the batch complete; next batch requires explicit user instruction"
+  ]
+}

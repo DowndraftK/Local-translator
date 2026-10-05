@@ -16,8 +16,10 @@ B02接续[B01协议](跨平台-B01本地worker协议.md)的父进程拥有匿名
 
 快照采用snapshot.begin/chunk/end：begin含transfer UUID、UTF-8总字节和sha256；chunk含从0连续index与最多16384原始字节的base64；end后核对总长度/hash再交付UI。传输总上限32MiB。worker串行发送完整快照，允许取消/诊断事件穿插，不允许两个快照交错。活动翻译快照同时绑定operation/lease。旧session、重复/乱序事件、丢失/乱序/过量块、checksum不配均拒绝，不能将半份快照当作结果。
 
-文字操作使用20秒租约，Qt每5秒续期；worker独立监听期限，过期取消拥有socket并保存后报告lease_expired。已完成请求从客户端map清理，避免长操作续期或多次刷新累积到512项上限。取消在headers/readline等待时也可中断；HTTP连接5秒、请求读取120秒、翻译总时限600秒，诊断请求另有10秒上限。
+文字操作使用20秒租约，Qt每5秒续期；worker独立监听期限，过期取消拥有socket并保存后报告lease_expired。已完成请求从客户端map清理，避免长操作续期或多次刷新累积到512项上限。取消在headers/readline等待时也可中断；HTTP连接5秒、请求读取120秒、翻译总时限600秒，诊断请求另有10秒上限。SocketIO内部0.1秒轮询仅用于检查取消/原有截止时间，轮询timeout不泄漏到buffered reader，不缩短预算或截断慢响应。Windows读取中止异常在调用方保留取消身份；没有取消的同类异常仍为service_unavailable。
+
+2026-10-05原生Windows复验发现venv python.exe为额外创建子进程的启动器。现在QProcess和命令验证直接启动同一受控CPython基座，以CPython自身`__PYVENV_LAUNCHER__`契约进入原venv；ready中的worker_pid与实际持有的进程句柄一致，不额外加入任意site-packages。未ready进程没有收到任务请求，30秒未确认时只结束该确切进程；已确认操作仍等待尾部。UTF-8显式启用，不靠全局环境变量改变解释器。
 
 task.done或operation.finished在最后一致快照之后发送。快照携带durable_revision、warning、save_blocked，UI明确区分已落盘状态与保存失败的内存确认结果。业务错误显示具体原因并保留worker；协议错误按B01规则拒绝失配进程。正常OS退出仍由外部观察确认，不能用窗口closeEvent或shutdown.confirmed替代Qt/CPython最终退出证据。
 
-本协议不包含PDF、OCR、SQLite语音任务或安装器入口。Windows原生构建、匿名管道、文件锁/原子保存/路径与GUI尚待后续实机接续；Mac通过不等同Windows通过。
+当前源码`b02-preview.4`/`b02-text.4`继续使用协议1.1。两端原生构建、匿名管道、启动/租约/取消、文件锁/原子保存/路径适用检查已实跑；实际候选文字与GUI范围见[B02记录](跨平台-B02开发记录.md)和[指标](跨平台-B02指标.json)。本协议不包含PDF、OCR、SQLite语音任务或安装器入口。命令检查不替代实际登录桌面GUI证据。
