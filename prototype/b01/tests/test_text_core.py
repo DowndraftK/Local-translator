@@ -25,6 +25,7 @@ from translator_core.planning import MacBoundaries, QtBoundaries, split
 from translator_core.store import TaskStore, atomic_write
 from translator_core.tasks import TextTasks
 from translator_preview.protocol import encode, request
+from translator_preview.runtime import owned_environment, owned_python
 from test_protocol import Peer
 
 HELPER = PROJECT / "artifacts/b02-20261004/bin/text-boundaries"
@@ -158,8 +159,10 @@ class StoreCase(unittest.TestCase):
     def test_windows_junction_cannot_import_or_replace_external_task(self):
         external = Path(self.temp.name) / "external"; external.mkdir()
         junction = Path(self.temp.name) / "junction"
-        subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(external)],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        # Use CPython's native NTFS junction helper, avoiding cmd's inherited
+        # SSH stdin/console handles. This creates a real reparse point.
+        import _winapi
+        _winapi.CreateJunction(str(external), str(junction))
         try:
             with self.assertRaises(CoreError): TaskStore(junction / "preview")
             with self.assertRaises(CoreError): self.store.import_copy(junction)
@@ -312,7 +315,7 @@ class LocalAPI:
                     value = {"models": [model]}
                 elif self.path == "/api/show": value = {"capabilities": ["completion"]}
                 else:
-                    fixture.entered.set()
+                    if fixture.mode != "body": fixture.entered.set()
                     if fixture.mode == "headers": fixture.release.wait(3)
                     chunks = [dict(message={"content": "已确认译文。"}, done=False)]
                     if fixture.mode != "truncated":
@@ -322,6 +325,10 @@ class LocalAPI:
                     self.send_response(302); self.send_header("Location", "http://example.invalid/"); self.end_headers(); return
                 raw = value if isinstance(value, bytes) else json.dumps(value).encode()
                 self.send_response(200); self.send_header("Content-Length", str(len(raw))); self.end_headers()
+                if self.path == "/api/chat" and fixture.mode == "body":
+                    fixture.entered.set(); fixture.release.wait(3)
+                if self.path == "/api/chat" and fixture.mode == "slow_body":
+                    fixture.release.wait(.35)
                 try: self.wfile.write(raw)
                 except (OSError, BrokenPipeError): pass
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -368,16 +375,33 @@ class OllamaCase(unittest.TestCase):
         self.assertIsInstance(errors[0], Cancelled)
         self.assertEqual(Ollama(self.api.address).json("/api/version")["version"], "0.35.0")
 
+    def test_cancellation_interrupts_buffered_body_without_stopping_shared_server(self):
+        self.api.mode = "body"; engine = Ollama(self.api.address); errors = []
+        def run():
+            try: engine.translate("source", self.recipe)
+            except Exception as exc: errors.append(exc)
+        thread = threading.Thread(target=run); thread.start(); self.assertTrue(self.api.entered.wait(2))
+        start = time.monotonic(); engine.cancel(); thread.join(2)
+        self.assertFalse(thread.is_alive()); self.assertLess(time.monotonic() - start, 2)
+        self.assertIsInstance(errors[0], Cancelled)
+        self.assertEqual(Ollama(self.api.address).json("/api/version")["version"], "0.35.0")
+
+    def test_polling_waits_do_not_truncate_a_slow_buffered_response(self):
+        self.api.mode = "slow_body"
+        result = Ollama(self.api.address).translate("source", self.recipe)
+        self.assertEqual(result["translation"], "已确认译文。")
+        self.assertGreater(result["elapsedSeconds"], .3)
+
 
 class WorkerTextCase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="b02-worker-"); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "tasks"; self.session = str(uuid.uuid4()); self.events = queue.Queue()
         self.api = LocalAPI(); self.addCleanup(self.api.close)
-        self.process = subprocess.Popen([sys.executable, "-I", "-B", str(PROJECT / "prototype/b01/launch.py"), "worker",
+        self.process = subprocess.Popen([owned_python(), "-I", "-B", "-X", "utf8", str(PROJECT / "prototype/b01/launch.py"), "worker",
             "--session-id", self.session, "--task-root", str(self.root), "--boundary-helper", str(HELPER),
             "--endpoint", self.api.address],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            env=owned_environment(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.reader = threading.Thread(target=lambda: [self.events.put(json.loads(raw)) for raw in self.process.stdout], daemon=True)
         self.reader.start(); self.addCleanup(self.close)
         self.send("hello"); self.next("ready")

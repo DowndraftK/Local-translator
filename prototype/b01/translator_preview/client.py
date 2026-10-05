@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signa
 
 from .protocol import (MAX_FRAME_BYTES, STARTUP_TIMEOUT_MS, SHUTDOWN_TIMEOUT_MS, MAX_TRANSFER_BYTES, SNAPSHOT_CHUNK_BYTES,
                        EventTracker, ProtocolError, encode, request)
+from .runtime import owned_environment, owned_python
 
 
 class WorkerClient(QObject):
@@ -56,14 +57,13 @@ class WorkerClient(QObject):
         self.operation = self.terminal = self.failure = self.diagnostic = self.transfer = None
         self.ready_confirmed = self.shutdown_confirmed = False
         process = QProcess(self); self.process = process
-        environment = QProcessEnvironment.systemEnvironment()
-        for key in environment.keys():
-            if key.startswith(("PYTHON", "CONDA", "DYLD", "QT_", "QML")) or key in ("VIRTUAL_ENV", "LD_LIBRARY_PATH"):
-                environment.remove(key)
+        environment = QProcessEnvironment()
+        for key, value in owned_environment().items():
+            environment.insert(key, value)
         process.setProcessEnvironment(environment)
         process.setWorkingDirectory(str(self.launch_path.parent))
-        process.setProgram(sys.executable)
-        arguments = ["-I", "-B", str(self.launch_path), "worker", "--session-id", self.session_id]
+        process.setProgram(owned_python())
+        arguments = ["-I", "-B", "-X", "utf8", str(self.launch_path), "worker", "--session-id", self.session_id]
         if self.task_root: arguments += ["--task-root", str(self.task_root)]
         if self.boundary_helper: arguments += ["--boundary-helper", str(self.boundary_helper)]
         if self.endpoint: arguments += ["--endpoint", self.endpoint]
@@ -235,9 +235,14 @@ class WorkerClient(QObject):
 
     def fail(self, code):
         self.failure = code; self.timer.stop(); self.heartbeat.stop(); self.set_state("failed")
-        # Only this parent-owned B01 process is stopped; no process-name killing.
+        # No task requests are sent before ready. An unconfirmed console worker
+        # has no window to receive Windows WM_CLOSE, so stop this exact process.
+        # Confirmed operations retain the separate tail-drain shutdown window.
         if self.process and self.process.state() != QProcess.NotRunning:
-            self.process.terminate(); self.shutdown_timer.start(SHUTDOWN_TIMEOUT_MS)
+            if not self.ready_confirmed:
+                self.process.kill()
+            else:
+                self.process.terminate(); self.shutdown_timer.start(SHUTDOWN_TIMEOUT_MS)
 
     def force_stop(self):
         if self.process and self.process.state() != QProcess.NotRunning:

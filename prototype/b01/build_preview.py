@@ -42,6 +42,10 @@ def main():
     if sys.platform not in ("darwin", "win32"):
         parser.error("Build on native macOS/Windows only.")
     from PySide6.QtCore import qVersion
+    sys.path[:0] = [str(source), str(project / "shared")]
+    from translator_preview import PREVIEW_ID
+    from translator_preview.runtime import owned_python
+    from translator_core import CORE_VERSION
     if qVersion() != lock["qt"]:
         parser.error("Loaded Qt does not match lock.")
     output.mkdir(parents=True)
@@ -83,7 +87,7 @@ def main():
     files = sorted(p for root in (source, project / "shared") for p in root.rglob("*")
                    if p.is_file() and "__pycache__" not in p.parts)
     files += sorted((project / "fixtures/b01").glob("swift-recipe-*.json"))
-    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": "b02-preview.2",
+    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": PREVIEW_ID,
         "build_id": build_id, "mac_build": mac_build,
         "native_platform": sys.platform, "machine": platform.machine(),
         "built_at": datetime.now(timezone.utc).isoformat(), "branch": branch,
@@ -91,7 +95,8 @@ def main():
         "working_tree_modified": bool(run("git", "-C", project, "status", "--porcelain")),
         "source_files": {str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
         "python_version": platform.python_version(), "python_executable": sys.executable,
-        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 1}, "shared_core": "b02-text.2",
+        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 1}, "shared_core": CORE_VERSION,
+        "worker_executable": owned_python(),
         "preview_task_root": str(project / "artifacts/b02-20261004/tasks"),
         "dependency_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "dependencies": {item["name"]: item["version"] for item in lock["packages"]},
@@ -126,7 +131,10 @@ def main():
     else:
         # No installer or claimed independent EXE in B01: native Python/Qt bytecode
         # build plus an explicit local interpreter launcher for desktop verification.
-        launcher = f'@echo off\r\n"{sys.executable}" -I -B "%~dp0B01\\launch.py" %*\r\n'
+        launcher = (f'@echo off\nsetlocal\nchcp 65001 >nul\n'
+                    f'set "__PYVENV_LAUNCHER__={sys.executable}"\n'
+                    f'"{owned_python()}" -I -B -X utf8 "%~dp0B01\\launch.py" %*\n'
+                    'exit /b %errorlevel%\n')
         (output / "Launch-B02.cmd").write_text(launcher, encoding="utf-8")
     (output / "candidate.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"build_id": build_id, "output": str(output), "source_files": len(files)}, ensure_ascii=False))

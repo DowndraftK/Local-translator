@@ -13,6 +13,42 @@ from .contracts import recipe_binding, strict_json, validate_recipe, trim
 OUTPUT_BYTES = 256_000
 
 
+class RequestSocket(socket.socket):
+    """Poll inside SocketIO, never expose a polling timeout to its buffer.
+
+    Closing/shutting down another thread's socket does not reliably wake the
+    Windows timeout select. Catch short transport waits below makefile(), so a
+    cancelled header or buffered readline is bounded without corrupting that
+    buffer or shortening the original 120/600-second request budgets.
+    """
+    def __init__(self, family, cancelled, deadline):
+        super().__init__(family, socket.SOCK_STREAM)
+        self.cancelled, self.deadline = cancelled, deadline
+
+    def checkpoint(self, read_deadline):
+        if self.cancelled.is_set(): raise Cancelled()
+        if time.monotonic() >= min(self.deadline, read_deadline):
+            raise socket.timeout("Owned request reached its bounded deadline")
+
+    def recv_into(self, buffer, nbytes=0, flags=0):
+        read_deadline = time.monotonic() + 120
+        while True:
+            self.checkpoint(read_deadline)
+            try: return super().recv_into(buffer, nbytes, flags)
+            except socket.timeout: pass
+
+    def sendall(self, data, flags=0):
+        write_deadline = time.monotonic() + 120
+        remaining = memoryview(data).cast("B")
+        while remaining:
+            self.checkpoint(write_deadline)
+            try:
+                count = super().send(remaining, flags)
+                if count == 0: raise ConnectionError("Owned request socket closed")
+                remaining = remaining[count:]
+            except socket.timeout: pass
+
+
 def endpoint(value):
     try:
         url = urlsplit(value)
@@ -57,17 +93,17 @@ class Ollama:
                 try: sock.close()
                 except OSError: pass
 
-    def _connect(self, connection):
+    def _connect(self, connection, deadline):
         self.check()
         family = socket.AF_INET6 if self.host == "::1" else socket.AF_INET
-        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock = RequestSocket(family, self.cancelled, deadline)
         sock.settimeout(5)
         with self.lock:
             self.sockets.add(sock)
             if self.cancelled.is_set(): sock.close(); raise Cancelled()
         try:
             sock.connect((self.host, self.port)); self.check()
-            sock.settimeout(120); connection.sock = sock
+            sock.settimeout(.1); connection.sock = sock
         except BaseException:
             with self.lock: self.sockets.discard(sock)
             sock.close(); raise
@@ -77,21 +113,10 @@ class Ollama:
         import json
         self.check()
         connection = http.client.HTTPConnection(self.host, self.port, timeout=5)
-        connection.connect = lambda: self._connect(connection)
-        stopped = threading.Event()
         deadline = time.monotonic() + (600 if stream else 10)
-        timed_out = threading.Event()
-        def limit():
-            while not stopped.wait(.1):
-                if time.monotonic() >= deadline:
-                    timed_out.set()
-                    with self.lock:
-                        for sock in tuple(self.sockets):
-                            try: sock.shutdown(socket.SHUT_RDWR)
-                            except OSError: pass
-                    return
-        watcher = threading.Thread(target=limit, daemon=True); watcher.start()
+        connection.connect = lambda: self._connect(connection, deadline)
         initial_sockets = set()
+        response = None
         try:
             raw = None if body is None else json.dumps(body, ensure_ascii=False, allow_nan=False).encode()
             connection.request("GET" if body is None else "POST", path, body=raw,
@@ -111,15 +136,13 @@ class Ollama:
             self.check()
             raise CoreError("本地服务连接中断或超时，请检查服务后主动继续。", "service_unavailable") from exc
         finally:
-            stopped.set(); watcher.join(timeout=.5)
+            if response is not None: response.close()
             connection.close()
             with self.lock:
                 # An engine is serial; keep references even when HTTPConnection
                 # clears .sock because the server sent Connection: close.
                 for sock in tuple(self.sockets | initial_sockets):
                     sock.close(); self.sockets.discard(sock)
-        if timed_out.is_set():
-            raise CoreError("本地请求达到有界时限。", "service_unavailable")
 
     def json(self, path, body=None):
         generator = self._request(path, body)

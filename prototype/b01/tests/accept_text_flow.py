@@ -19,12 +19,13 @@ if not ROOT.is_relative_to(P/'artifacts') or not EVIDENCE.is_relative_to(P/'arti
 EVIDENCE.mkdir(parents=True,exist_ok=True)
 sys.path[:0]=[str(PACKAGE),str(PACKAGE/'shared')]
 from translator_preview.protocol import encode,request,EventTracker
+from translator_preview.runtime import owned_environment,owned_python
 from translator_core.contracts import decode_snapshot,foundation_json,sha
 report={'schema':1,'candidate':json.loads((C/'candidate.json').read_bytes()),'cases':[],'windows_tested':sys.platform=='win32'}
 class Peer:
  def __init__(self):
   self.session=str(uuid.uuid4());self.tracker=EventTracker(self.session);self.events=queue.Queue();self.snapshots=[];self.trace=[];self.transfer=None
-  self.process=subprocess.Popen([sys.executable,'-I','-B',str(PACKAGE/'launch.py'),'worker','--session-id',self.session,'--task-root',str(ROOT),'--boundary-helper',str(PACKAGE/'shared/platform/macos/text-boundaries')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  self.process=subprocess.Popen([owned_python(),'-I','-B','-X','utf8',str(PACKAGE/'launch.py'),'worker','--session-id',self.session,'--task-root',str(ROOT),'--boundary-helper',str(PACKAGE/'shared/platform/macos/text-boundaries')],env=owned_environment(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   self.reader=threading.Thread(target=self.read,daemon=True);self.reader.start();self.send('hello');self.until('ready')
  def read(self):
   for raw in self.process.stdout:

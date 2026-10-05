@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from translator_preview.protocol import (PROTOCOL, STARTUP_TIMEOUT_MS, EventTracker,
                                          ProtocolError, decode, encode, request)
 from translator_preview.fixtures import verify_fixtures
+from translator_preview.runtime import owned_environment, owned_python
 
 LAUNCH = Path(__file__).resolve().parents[1] / "launch.py"
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures/b01"
@@ -24,8 +25,9 @@ FIXTURES = Path(__file__).resolve().parents[3] / "fixtures/b01"
 class Peer:
     def __init__(self):
         self.session = str(uuid.uuid4()); self.events = queue.Queue()
-        self.process = subprocess.Popen([sys.executable, "-I", "-B", str(LAUNCH), "worker",
-            "--session-id", self.session], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.process = subprocess.Popen([owned_python(), "-I", "-B", "-X", "utf8", str(LAUNCH), "worker",
+            "--session-id", self.session], env=owned_environment(),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.reader = threading.Thread(target=self.read, daemon=True); self.reader.start()
 
     def read(self):
@@ -204,6 +206,7 @@ class QtClientTests(unittest.TestCase):
         client = WorkerClient(); events = []; client.event.connect(events.append)
         self.assertTrue(client.connect_worker()); self.assertFalse(client.connect_worker())
         self.wait(lambda: client.state == "ready")
+        self.assertEqual(client.diagnostic["worker_pid"], client.process.processId())
         self.assertTrue(client.start_probe()); self.wait(lambda: any(x["type"] == "progress" for x in events))
         self.assertTrue(client.cancel()); self.assertFalse(client.cancel())
         self.wait(lambda: client.terminal is not None)
