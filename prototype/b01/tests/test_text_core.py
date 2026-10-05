@@ -158,24 +158,21 @@ class StoreCase(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "win32", "Native NTFS junction check applies to Windows only")
     def test_windows_junction_cannot_import_or_replace_external_task(self):
-        external = Path(self.temp.name) / "external"; external.mkdir()
-        junction = Path(self.temp.name) / "junction"
-        # PowerShell creates the real NTFS junction without _winapi's privileged
-        # token adjustment. Do not inherit the worker/SSH protocol input pipe.
-        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
-        script = ("$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path " + quote(junction) +
-                  " -Target " + quote(external) + " | Out-Null")
-        powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
-        result = subprocess.run([str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand",
-                                 base64.b64encode(script.encode("utf-16le")).decode("ascii")],
-                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-        self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+        # The native PowerShell wrapper owns fixture creation and cleanup. Some
+        # Windows policies deny Python reparse-point creation while allowing the
+        # normal file tools; protection checks must still exercise a REAL junction.
+        prepared = os.environ.get("B02_NATIVE_JUNCTION_FIXTURE")
+        if not prepared:
+            self.skipTest("Run Test-Windows-B02.ps1 to supply a real, owned NTFS junction fixture")
+        junction = Path(prepared).absolute()
+        self.assertTrue(junction.is_relative_to(PROJECT / "artifacts"))
         self.assertTrue(junction.is_junction())
-        try:
-            with self.assertRaises(CoreError): TaskStore(junction / "preview")
-            with self.assertRaises(CoreError): self.store.import_copy(junction)
-            self.assertEqual(list(external.iterdir()), [])
-        finally: junction.rmdir()
+        external = junction.resolve(strict=True)
+        self.assertTrue(external.is_relative_to(PROJECT / "artifacts"))
+        self.assertEqual(list(external.iterdir()), [])
+        with self.assertRaises(CoreError): TaskStore(junction / "preview")
+        with self.assertRaises(CoreError): self.store.import_copy(junction)
+        self.assertEqual(list(external.iterdir()), [])
 
     def test_qt_unicode_packing_keeps_graphemes_complete_and_source_exact(self):
         boundaries = QtBoundaries()
