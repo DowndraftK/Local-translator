@@ -1,4 +1,6 @@
-# B02共享文字核心
+# B02/B03共享任务核心
+
+B03新增 `documents` / `document_tasks` / `pdf_adapter`，沿用同一 `TextTasks` 调度；页清单、来源修订和页内计划不放平台后端。Mac窄PDFKit事实进程、Windows固定PDFium只提供页数/文字/渲染，文件交接有界且核对hash/大小/页/后端。schema1和旧recipe/计划保持；最多200选中物理页，起点可大于200，TXT为全文。实际候选、失败和GUI缺口见[B03记录](../docs/跨平台-B03开发记录.md)。
 
 `translator_core`只依赖CPython标准库：冻结配置与schema1、分段装箱、保存恢复、Ollama请求、调度、有限重试与完整双语TXT都在此处。共享Qt页面与worker传输层位于`prototype/b01`；目录名保留B01历史，当前源码身份为B02预览，不复制第二套业务实现。
 

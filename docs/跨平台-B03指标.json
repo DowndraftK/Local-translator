@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "batch": "B03",
+  "date": "2026-10-05",
+  "status": "partial",
+  "product": "0.2.11",
+  "preview": "b03-preview.2",
+  "core": "b03-document.2",
+  "protocol": {
+    "major": 1,
+    "minor": 2
+  },
+  "source_commit": "d50a6c18b6c1dd8fdd4e3b1a91ecdb308c120a3c",
+  "branch": "codex/cross-platform-b01",
+  "user_uncommitted_document_preserved": true,
+  "mac": {
+    "candidate": "macos-arm64-build60",
+    "path": "dist/B03-20261005-mac-r2",
+    "build": 60,
+    "build_confirmed": true,
+    "worker_real_cases": 14,
+    "worker_passed": true,
+    "gui": "blocked_locked_desktop",
+    "actual_ui_exit": "unverified",
+    "pdf_backend": "pdfkit-text-render-v1;macOS=27.0.1",
+    "shared_checks": {
+      "registered": 83,
+      "passed": 81,
+      "skipped": 2
+    }
+  },
+  "windows": {
+    "candidate": "windows-x64-b03-20261005T104125061459Z",
+    "path": "dist/B03-20261005-windows-r2",
+    "build_confirmed": true,
+    "pdf_backend": "pdfium-text-render-v2;pypdfium2=5.14.0;PDFium=156.0.8076.0",
+    "shared_checks": {
+      "registered": 83,
+      "passed": 81,
+      "skipped": 2,
+      "real_junction": true
+    },
+    "worker_real_flow": "incomplete_external_owner_completion_missing",
+    "gui": "unverified",
+    "actual_ui_exit": "unverified"
+  },
+  "swift_checks": {
+    "registered": 73,
+    "passed": 72,
+    "skipped": 1
+  },
+  "production_python": "unchanged; inherited valid evidence",
+  "limits": {
+    "source_bytes": 256000000,
+    "selected_pages": 200,
+    "input_utf8_bytes": 1048576,
+    "segments": 4096,
+    "snapshot_bytes": 33554432,
+    "render_edge": 3000,
+    "render_pixels": 9000000,
+    "render_scale": 3,
+    "image_handoff_bytes": 40000000
+  },
+  "peak_memory_bytes": null,
+  "peak_memory_status": "unverified",
+  "compatibility": {
+    "schema": 1,
+    "foundation_recipe_bytes_preserved": true,
+    "v1_context_version_omitted": true,
+    "saved_plan_not_reordered": true,
+    "success_prefix_unchanged": true,
+    "source_missing_never_replaced": true,
+    "old_production_roots_modified": false
+  },
+  "b02_gui": {
+    "windows_old_candidate_user_runs": 2,
+    "windows_actual_ui_exit_codes": [
+      0,
+      0
+    ],
+    "mac_build58_run2_actual_exit": 0,
+    "mac_build58_run4_remaining": [
+      "export",
+      "external normal exit"
+    ]
+  },
+  "owned_runner_repair": {
+    "reported_pids": [
+      6584,
+      4668,
+      22544
+    ],
+    "ownership_confirmed": true,
+    "reclaimed": true,
+    "native_job_child_check_passed": true,
+    "real_post_repair_model_exit": "pending completion evidence",
+    "shared_service_stopped": false
+  },
+  "pdf_dependency": {
+    "name": "pypdfium2",
+    "version": "5.14.0",
+    "wheel_bytes": 3947280,
+    "sha256": "149fd5c6397b8df8bf7911a93506eff0be874f877afe7ac936cf5d37d21a6a06",
+    "unpacked_files": 71,
+    "unpacked_bytes": 7984875,
+    "license": "BSD-3-Clause / Apache-2.0 plus bundled PDFium third-party; lock and full local licenses",
+    "models_downloaded": false
+  },
+  "b04_prerequisites": {
+    "shared_data_source_protocol_fixtures": "validated",
+    "platform_gui_gates": "incomplete; register independently",
+    "continuous_authorization": "explicit user instruction"
+  },
+  "evidence_root": "artifacts/b03-20261005",
+  "inference_scope": "finite three-page PDF / BOM TXT; no 220-page model test",
+  "remaining": [
+    "current B03 Mac/Windows actual GUI and normal App exit",
+    "Windows real candidate complete worker flow report",
+    "Mac build58 final export/exit",
+    "B04 separately; stop after B04; no B05-B12"
+  ]
+}
