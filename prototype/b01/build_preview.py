@@ -113,6 +113,7 @@ def main():
             "CFBundleDisplayName": "本地翻译器 B02预览", "CFBundleExecutable": "B02Preview",
             "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.2.11",
             "CFBundleVersion": str(mac_build), "LSMinimumSystemVersion": "26.0",
+            "NSDocumentsFolderUsageDescription": "此开发预览需要读取文稿目录中的项目运行环境，并保存独立的测试任务。",
             "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication"}
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         executable = app / "Contents/MacOS/B02Preview"

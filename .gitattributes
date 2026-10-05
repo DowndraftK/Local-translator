@@ -1,0 +1,3 @@
+# Preserve canonical source and frozen checksum/recipe/source fixture bytes.
+# Windows global core.autocrlf must not change task or binding evidence.
+* -text
