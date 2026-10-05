@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import os
 import queue
 import shutil
 import subprocess
@@ -159,10 +160,17 @@ class StoreCase(unittest.TestCase):
     def test_windows_junction_cannot_import_or_replace_external_task(self):
         external = Path(self.temp.name) / "external"; external.mkdir()
         junction = Path(self.temp.name) / "junction"
-        # Use CPython's native NTFS junction helper, avoiding cmd's inherited
-        # SSH stdin/console handles. This creates a real reparse point.
-        import _winapi
-        _winapi.CreateJunction(str(external), str(junction))
+        # PowerShell creates the real NTFS junction without _winapi's privileged
+        # token adjustment. Do not inherit the worker/SSH protocol input pipe.
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        script = ("$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path " + quote(junction) +
+                  " -Target " + quote(external) + " | Out-Null")
+        powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        result = subprocess.run([str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+                                 base64.b64encode(script.encode("utf-16le")).decode("ascii")],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+        self.assertTrue(junction.is_junction())
         try:
             with self.assertRaises(CoreError): TaskStore(junction / "preview")
             with self.assertRaises(CoreError): self.store.import_copy(junction)
