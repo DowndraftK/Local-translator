@@ -8,6 +8,7 @@ import sys
 import time
 import zlib
 from pathlib import Path
+from contextlib import closing
 
 
 def png(bitmap, path):
@@ -43,7 +44,7 @@ def main():
     if req["schema"] != 1: raise RuntimeError("Unsupported fact schema")
     action = req["action"]; start = time.monotonic()
     reply = dict(schema=1, request=req["request"], action=action, complete=True,
-                 backend="pdfium-text-render-v1;pypdfium2=5.14.0;PDFium=156.0.8076.0")
+                 backend="pdfium-text-render-v2;pypdfium2=5.14.0;PDFium=156.0.8076.0")
     if action != "probe":
         reply["fingerprint"] = req["fingerprint"]
         with pdfium.PdfDocument(req["source"]) as document:
@@ -54,14 +55,14 @@ def main():
                 number = req["page"]
                 if type(number) is not int or not 1 <= number <= total: raise RuntimeError("Physical page out of range")
                 reply["page"] = number
-                with document.get_page(number - 1) as page:
+                with closing(document.get_page(number - 1)) as page:
                     label = document.get_page_label(number - 1)
                     if label: reply["label"] = label
                     if action == "page":
-                        with page.get_textpage() as textpage:
+                        with closing(page.get_textpage()) as textpage:
                             if textpage.count_chars() > 1_048_576: raise RuntimeError("Single page exceeds 1MiB text guard")
                             # Preserve PDFium's whole page sequence, including repeated text.
-                            text = textpage.get_text_range(errors="strict")
+                            text = textpage.get_text_bounded(errors="strict")
                             if len(text.encode()) > 1_048_576: raise RuntimeError("Single page exceeds 1MiB UTF-8 guard")
                             reply["text"] = text
                     elif action == "render":
@@ -70,8 +71,8 @@ def main():
                         if (rotation not in (0, 90, 180, 270) or not all(math.isfinite(v) for v in (width, height)) or min(width, height) <= 0):
                             raise RuntimeError("Invalid crop/rotation")
                         scale = min(3, 3000 / max(width, height), math.sqrt(9_000_000 / width / height))
-                        with page.render(scale=scale, rotation=0, force_bitmap_format=raw.FPDFBitmap_BGR,
-                                         rev_byteorder=True, fill_color=(255, 255, 255, 255), limit_image_cache=True) as bitmap:
+                        with closing(page.render(scale=scale, rotation=0, force_bitmap_format=raw.FPDFBitmap_BGR,
+                                         rev_byteorder=True, fill_color=(255, 255, 255, 255), limit_image_cache=True)) as bitmap:
                             if max(bitmap.width, bitmap.height) > 3000 or bitmap.width * bitmap.height > 9_000_000:
                                 raise RuntimeError("Render pixel guard exceeded")
                             image = Path(req["image"]); png(bitmap, image)

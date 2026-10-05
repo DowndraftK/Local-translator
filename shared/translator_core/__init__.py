@@ -1,6 +1,6 @@
 """Shared text contracts, persistence and scheduling. No UI or GPU imports."""
 
-CORE_VERSION = "b03-document.1"
+CORE_VERSION = "b03-document.2"
 
 
 class CoreError(ValueError):
