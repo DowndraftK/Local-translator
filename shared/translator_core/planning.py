@@ -11,6 +11,8 @@ from .contracts import SOURCE_BYTES, MAX_INPUT_BYTES
 
 
 class MacBoundaries:
+    splitter_version = "natural-language-utf8-v1"
+
     def __init__(self, executable):
         self.executable = Path(executable)
 
@@ -40,6 +42,60 @@ class MacBoundaries:
         if reply.get("schema") != 1 or reply.get("byteCount") != len(source.encode()):
             raise CoreError("分句适配器身份不匹配。")
         return reply["boundaries"]
+
+
+class QtBoundaries:
+    """Fixed Qt Unicode facts for Windows; shared split() still owns packing.
+
+    This is a distinct algorithm identity, never an imitation of NLTokenizer.
+    Offsets from Qt are UTF-16 units and must be mapped to UTF-8 explicitly.
+    """
+    splitter_version = "qt6102-unicode-utf8-v1"
+
+    def __init__(self):
+        from PySide6.QtCore import QTextBoundaryFinder, qVersion
+        if qVersion() != "6.10.2":
+            raise CoreError("Windows分句需要固定Qt6.10.2。", "boundary_adapter_unavailable")
+        self.finder = QTextBoundaryFinder
+
+    def __call__(self, source, cancel):
+        if cancel.is_set(): raise Cancelled()
+        offsets = {0: (0, 0)}
+        utf16 = utf8 = 0
+        for index, char in enumerate(source):
+            utf16 += 2 if ord(char) > 0xffff else 1
+            utf8 += len(char.encode())
+            offsets[utf16] = (utf8, index + 1)
+
+        def positions(kind):
+            finder = self.finder(kind, source)
+            result = []
+            while True:
+                if cancel.is_set(): raise Cancelled()
+                end = finder.toNextBoundary()
+                if end < 0: return result
+                if end not in offsets:
+                    raise CoreError("Qt边界落在UTF-16代理对中。")
+                result.append(end)
+
+        sentence_ends = set(positions(self.finder.Sentence))
+        # Unicode White_Space, pinned here rather than Python's broader isspace.
+        whitespace = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+        newlines = "\n\r\v\f\u0085\u2028\u2029"
+        rows, start = [], 0
+        for end in positions(self.finder.Grapheme):
+            byte_end, index = offsets[end]
+            cluster = source[start:index]
+            rows.append([byte_end, int(all(c in newlines for c in cluster)),
+                         int(all(c in whitespace for c in cluster)), int(end in sentence_ends)])
+            start = index
+        return rows
+
+
+def platform_boundaries(executable=None):
+    if sys.platform == "darwin": return MacBoundaries(executable or "")
+    if sys.platform == "win32": return QtBoundaries()
+    raise CoreError("此预览仅接原生Mac/Windows。", "boundary_adapter_unavailable")
 
 
 def split(source, boundaries, cancel, byte_limit=SOURCE_BYTES):

@@ -5,7 +5,7 @@ import sys
 import threading
 import uuid
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from . import CoreError
 from .contracts import (MAX_INPUT_BYTES, MAX_SNAPSHOT_BYTES, decode_snapshot,
@@ -14,9 +14,18 @@ from .contracts import (MAX_INPUT_BYTES, MAX_SNAPSHOT_BYTES, decode_snapshot,
 MARKER = b"LocalTranslator B02 isolated text store v1\n"
 
 
+def is_link(path):
+    path = Path(path)
+    if path.is_symlink(): return True
+    # NTFS junctions are directory reparse points, not Python symbolic links.
+    if sys.platform == "win32":
+        return any(p.is_junction() or p.is_symlink() for p in (path, *path.parents))
+    return False
+
+
 def safe_file(path, limit=MAX_SNAPSHOT_BYTES * 2):
     path = Path(path)
-    if path.is_symlink() or not path.is_file():
+    if is_link(path) or not path.is_file():
         raise CoreError("文件缺失或为符号链接，原数据保留。", "unsafe_path")
     with path.open("rb") as handle:
         data = handle.read(limit + 1)
@@ -27,7 +36,7 @@ def safe_file(path, limit=MAX_SNAPSHOT_BYTES * 2):
 
 def atomic_write(data, path):
     path = Path(path)
-    if path.is_symlink():
+    if is_link(path) or is_link(path.parent):
         raise CoreError("拒绝替换符号链接。", "unsafe_path")
     temp = path.with_name(".write-" + uuid.uuid4().hex)
     descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -49,7 +58,7 @@ class TaskStore:
         self.write = write
         self.high_water = {}
         self.mutex = threading.RLock()
-        if self.root.is_symlink():
+        if is_link(self.root):
             raise CoreError("预览任务根不能是符号链接。", "unsafe_path")
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         marker = self.root / ".b02-preview-store"
@@ -60,14 +69,18 @@ class TaskStore:
         if safe_file(marker, 200) != MARKER:
             raise CoreError("预览目录身份不匹配。", "root_not_isolated")
         lock_path = self.root / ".writer.lock"
-        if lock_path.is_symlink():
+        if is_link(lock_path):
             raise CoreError("任务锁路径无效。", "unsafe_path")
         self.lock = lock_path.open("a+b")
         try:
             if sys.platform == "win32":
-                # Native Windows compatibility is deliberately still unverified.
                 import msvcrt
-                self.lock.seek(0); self.lock.write(b"0"); self.lock.flush(); self.lock.seek(0)
+                # Do not append a byte on every reopen or touch a byte another
+                # writer has locked. The first writer initializes only an empty file.
+                self.lock.seek(0, os.SEEK_END)
+                if self.lock.tell() == 0:
+                    self.lock.write(b"0"); self.lock.flush()
+                self.lock.seek(0)
                 msvcrt.locking(self.lock.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
@@ -77,7 +90,7 @@ class TaskStore:
             raise CoreError("另一预览正在写此目录，请先安全关闭。", "writer_busy") from exc
         for name in ("incoming", "exports"):
             folder = self.root / name
-            if folder.is_symlink():
+            if is_link(folder):
                 self.close(); raise CoreError("预览目录包含不安全路径。", "unsafe_path")
             folder.mkdir(exist_ok=True, mode=0o700)
 
@@ -87,7 +100,7 @@ class TaskStore:
 
     def directory(self, identity):
         result = self.root / task_id(identity)
-        if result.is_symlink():
+        if is_link(result):
             raise CoreError("任务目录不能是符号链接。", "unsafe_path")
         return result
 
@@ -101,7 +114,8 @@ class TaskStore:
         name = asset.get("filename")
         if (not isinstance(name, str) or not name or name in (".", "..") or
                 any(c in name for c in ("/", "\\", ":", "\0")) or
-                name in ("current.json", "previous.json") or name.startswith(".")):
+                name.casefold() in ("current.json", "previous.json") or name.startswith(".") or
+                name.endswith((".", " ")) or PureWindowsPath(name).is_reserved()):
             raise CoreError("源副本路径无效。", "unsafe_path")
         return name
 
@@ -161,7 +175,7 @@ class TaskStore:
         with self.mutex:
             directory = self.directory(identity); current = directory / "current.json"
             existing = None
-            if current.exists() or current.is_symlink():
+            if current.exists() or is_link(current):
                 existing = safe_file(current); previous = decode_snapshot(existing)
                 if task_id(previous["id"]) != identity:
                     raise CoreError("任务目录身份不匹配。")
@@ -172,7 +186,7 @@ class TaskStore:
             name = self.asset_name(task)
             if name:
                 asset = directory / name
-                if not asset.exists() and not asset.is_symlink():
+                if not asset.exists() and not is_link(asset):
                     metadata = task["asset"]
                     if asset_data is None or len(asset_data) != metadata["byteCount"] or sha(asset_data) != metadata["fingerprint"]:
                         raise CoreError("缺少匹配的封存源副本。", "source_mismatch")
@@ -187,7 +201,7 @@ class TaskStore:
     def import_copy(self, source):
         """Explicit read-only source selection, preserving exact original snapshot bytes."""
         source = Path(source).absolute()
-        if source.is_symlink() or not source.is_dir():
+        if is_link(source) or not source.is_dir():
             raise CoreError("请选择实际任务目录，不能选择符号链接。", "unsafe_path")
         identity = task_id(source.name)
         task, warning = self.read_directory(source, identity)

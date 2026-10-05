@@ -1,4 +1,27 @@
-# B01 共享桌面界面开发预览
+# 共享桌面开发预览（B01接续至B02）
+
+2026-10-05当前源码为 **B02文字预览**：产品0.2.11、`b02-preview.1`、协议1.1，Mac实际候选build51。Qt/CPython继续使用下方B01固定受控环境；没有新装第三方库。共享业务在[`shared/translator_core`](../../shared/README.md)，已接双向文字/长文分段/取消/有限重试/保存/打开/主动继续/完整TXT，旧任务只显式导入副本。新预览与旧SwiftUI、B01/build50独立保留。真实通过范围见[B02记录](../../docs/跨平台-B02开发记录.md)、[协议1.1](../../docs/跨平台-B02本地worker协议.md)与[指标](../../docs/跨平台-B02指标.json)。
+
+Mac可打开`dist/B02-20261004-mac-candidate51/本地翻译器 B02预览.app`。先进入“文字翻译”，输入原文并“保存为新任务”，再主动开始。打开任务不自动翻译；恢复后主动继续只处理未完成段。任务根为本机项目`artifacts/b02-20261004/tasks`，不能直接指定旧生产TextDocuments根。源副本或current损坏时保留原数据，仍可导出，继续受阻必须另建任务。
+
+重新检查共享源码时，从项目根运行：
+
+```sh
+artifacts/b01-20261004/venv-qt6102/bin/python -I -B -m unittest discover -s prototype/b01/tests -v
+swift test
+```
+
+Mac分句检查需真实编译的`artifacts/b02-20261004/bin/text-boundaries`，生成方式：
+
+```sh
+mkdir -p artifacts/b02-20261004/bin
+swiftc -O -module-cache-path artifacts/b02-20261004/module-cache \
+  shared/platform/macos/TextBoundaries.swift -o artifacts/b02-20261004/bin/text-boundaries
+```
+
+新构建继续用下方builder，但输出选择新的`dist/B02-新候选目录`；生成B02 App/`Launch-B02.cmd`，Mac按实际最高build递增。Windows命令启动器仍为开发候选，并未取得本机验证。**本次按用户指令只在Mac跑通B02，未尝试SSH；Windows分句/字符边界、原生文件锁/原子保存、路径、依赖、构建/GUI和真实Ollama流程须后续实机接续。** 不将Mac分句helper、截图或命令结果用作Windows通过证据。下面B01说明保留历史选型/环境来源；“不连接Ollama/尚无文字业务”只描述冻结B01候选，不描述当前B02源码。
+
+## B01历史范围与固定环境
 
 主路线：Qt6 / PySide6-Essentials **6.10.2**、shiboken6 **6.10.2**、独立 CPython **3.12.14** 开发环境。共用产品目标 **0.2.11**，候选 `b01-preview.1`，协议 **1.0**。这是项目内小型开发原型，不是 B09 独立运行包或 B12 安装器。旧 SwiftUI 0.2.10/build46 和 0.2.9/build35 不替换。
 
@@ -52,4 +75,4 @@ Set-Location -LiteralPath $B01ProjectRoot
 
 协议见[本地worker协议](../../docs/跨平台-B01本地worker协议.md)。`translator_preview/fixtures.py`只读核对 `fixtures/b01` 的原字节/hash、schema1 envelope/base64/checksum、source、成功前缀和两类recipe binding，不迁移或重写旧任务。Swift夹具由现有生产 `JSONOutput`、`TaskRecoveryStore`生成，全部为自编材料；对应完整Swift回归包含固定字节复验。Python字幕夹具由生产`translation_config`生成，SQLite仍schema3，B01未实现跨平台读写数据库。
 
-本批交付后停止。B02必须另行启动，先补B01 Windows实际源码/依赖/构建/桌面证据，再按上批记录推进共享文字规则。
+历史B01交付后已停止；B02随后按用户明确指令先在Mac实施。当前交付停在B02，B03—B12未启动；Windows接续仍先补B01实际源码/依赖/构建/桌面证据，再补B02平台适配和真实文字流程。

@@ -18,7 +18,7 @@ def main():
     destination = args.environment.resolve()
     if not destination.is_relative_to(project / "artifacts") or destination.exists():
         parser.error("Use a NEW environment inside this repository's artifacts directory.")
-    lock = json.loads(Path(__file__).with_name("dependencies.lock.json").read_text())
+    lock = json.loads(Path(__file__).with_name("dependencies.lock.json").read_text(encoding="utf-8"))
     if platform.python_version() != lock["python"]["version"] or sys.platform not in ("darwin", "win32"):
         parser.error("Requires native macOS/Windows and the pinned Python 3.12.14 development interpreter.")
     if sys.platform == "win32" and platform.machine().lower() not in ("amd64", "x86_64"):

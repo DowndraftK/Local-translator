@@ -69,4 +69,21 @@ private struct FrozenSplits: Codable {
     #expect(new.configuration.version == 2 && new.text?.count(.completed) == 1)
     #expect(new.configuration.binding == "c19bbf5bbe70bd67b17b65ae6457f7d1bf16ddec7a1c9ea1f64961bc5c907edc")
     #expect(new.text?.segments[0].result?.translation == "共享夹具结果。")
+    // Optional read-only audit of this batch's real, isolated text tasks. Never
+    // default to production TextDocuments or write a reopened task back.
+    if let roots = ProcessInfo.processInfo.environment["B02_REAL_TASK_ROOTS"] {
+        var checked = 0
+        for path in roots.split(separator: ":") {
+            let root = URL(fileURLWithPath: String(path)), real = TaskRecoveryStore(root: root)
+            for directory in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+                guard let identity = UUID(uuidString: directory.lastPathComponent) else { continue }
+                let task = try await real.read(identity).task
+                try task.validate()
+                #expect(try await real.sourceData(task).1 == Data(task.input.utf8))
+                checked += 1
+            }
+        }
+        #expect(checked > 0)
+        print("B02 production Swift real snapshot read count: \(checked)")
+    }
 }

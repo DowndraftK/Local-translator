@@ -100,7 +100,7 @@ def validate_recipe(recipe):
             version == 2 and recipe.get("contextVersion") == "none-v1" and
             recipe.get("promptProfile") == "hy-mt2-faithful-v2")):
         raise CoreError("配置版本不兼容；可阅读/导出，请另建任务。", "recipe_incompatible")
-    if (recipe.get("splitterVersion") != "natural-language-utf8-v1" or
+    if (recipe.get("splitterVersion") not in ("natural-language-utf8-v1", "qt6102-unicode-utf8-v1") or
             recipe.get("direction") not in ("en-zh", "zh-en") or
             options.get("num_ctx") != 8192 or options.get("num_predict") != 4096 or
             not all(type(v) in (int, float) and math.isfinite(v) for v in options.values())):

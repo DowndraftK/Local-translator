@@ -1,4 +1,4 @@
-"""Model-free lifecycle probe; importing this module never imports GPU libraries."""
+"""Shared text worker and model-free lifecycle probe; no GPU framework imports."""
 import argparse
 import base64
 import hashlib
@@ -15,7 +15,7 @@ from pathlib import Path
 from translator_core import CORE_VERSION, CoreError
 from translator_core.contracts import default_recipe, sha
 from translator_core.ollama import Ollama
-from translator_core.planning import MacBoundaries
+from translator_core.planning import platform_boundaries
 from translator_core.store import TaskStore, atomic_write
 from translator_core.tasks import TextTasks
 
@@ -26,7 +26,7 @@ from .protocol import (PROTOCOL, MAX_FRAME_BYTES, MAX_STEPS, SNAPSHOT_CHUNK_BYTE
 
 def capabilities(configured=False):
     return {"diagnostics": "ready", "lifecycle_probe": "ready",
-            "text_translation": "ready" if configured and sys.platform == "darwin" else "requires_verified_platform_adapter",
+            "text_translation": "ready" if configured and sys.platform in ("darwin", "win32") else "requires_verified_platform_adapter",
             "task_read_resume": "ready" if configured else "requires_preview_root",
             "pdf_txt": "not_implemented_b03", "ocr": "not_implemented_b04",
             "speech_file": "not_implemented_b05", "refinement_playback": "not_implemented_b06",
@@ -62,7 +62,7 @@ class Worker:
         self.tasks = None
         self.endpoint = endpoint
         if task_root:
-            self.tasks = TextTasks(TaskStore(task_root), MacBoundaries(boundary_helper or ""),
+            self.tasks = TextTasks(TaskStore(task_root), platform_boundaries(boundary_helper),
                                    engine_factory=lambda cancel: Ollama(self.endpoint, cancel=cancel))
 
     def emit(self, kind, req, **fields):
@@ -87,7 +87,9 @@ class Worker:
         if kind == "hello" and not self.hello:
             # Confirmation is emitted only after the real request loop is entered.
             self.hello = True
-            self.emit("ready", req, diagnostics=diagnostics(self.tasks is not None))
+            info = diagnostics(self.tasks is not None)
+            if self.tasks: info["splitter_version"] = self.tasks.boundaries.splitter_version
+            self.emit("ready", req, diagnostics=info)
         elif not self.hello:
             self.error(req, "handshake_required")
         elif kind == "diagnose":

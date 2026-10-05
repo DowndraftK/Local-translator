@@ -36,7 +36,7 @@ class PreviewWindow(QMainWindow):
         self.evidence_path, self.screenshot_path = evidence_path, screenshot_path
         self.started_monotonic = time.monotonic()
         identity_path = Path(__file__).resolve().parents[1] / "build-identity.json"
-        self.identity = json.loads(identity_path.read_text()) if identity_path.exists() else {
+        self.identity = json.loads(identity_path.read_text(encoding="utf-8")) if identity_path.exists() else {
             "product_version": PRODUCT_VERSION, "preview_id": PREVIEW_ID, "build_id": "development-unbuilt"}
         self.evidence = {"schema": 1, "candidate": self.identity,
             "started_at": datetime.now(timezone.utc).isoformat(), "platform": platform.system(),

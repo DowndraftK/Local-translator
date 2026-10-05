@@ -39,6 +39,7 @@ class TextTasks:
             if not isinstance(source, str) or not trim(source) or len(source.encode()) > MAX_INPUT_BYTES:
                 raise CoreError("请输入非空原文，预览上限1MiB UTF-8。")
             recipe = default_recipe(direction)
+            recipe["splitterVersion"] = getattr(self.boundaries, "splitter_version", recipe["splitterVersion"])
             identity = str(uuid.uuid4()).upper(); now = time.time() - FOUNDATION_EPOCH
             raw = source.encode(); fingerprint = sha(raw)
             task = dict(id=identity, revision=1, created=now, updated=now, name=(name or trim(source)[:32]),
@@ -107,6 +108,10 @@ class TextTasks:
             if self.task is None: raise CoreError("请先保存新任务或打开已有任务。")
             if self.save_blocked: raise CoreError("保存/源副本受阻，禁止继续；可完整导出后另建任务。", "save_blocked")
             validate_recipe(self.task["configuration"])
+            if (not (self.task.get("text") or {}).get("segments") and
+                    self.task["configuration"]["splitterVersion"] != getattr(
+                        self.boundaries, "splitter_version", "natural-language-utf8-v1")):
+                raise CoreError("未分段任务需要原分句适配器；请在原平台继续或另建任务。", "boundary_adapter_mismatch")
             self.store.verify_asset(self.task, self.store.directory(self.task["id"]))
             self.active = (generation, cancel)
             self.engine = self.engine_factory(cancel=cancel)

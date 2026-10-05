@@ -21,7 +21,7 @@ from translator_core import Cancelled, CoreError
 from translator_core.contracts import (bilingual_text, decode_snapshot, default_recipe, encode_snapshot,
                                        foundation_json, recipe_binding, sha, trim)
 from translator_core.ollama import Ollama, endpoint
-from translator_core.planning import MacBoundaries, split
+from translator_core.planning import MacBoundaries, QtBoundaries, split
 from translator_core.store import TaskStore, atomic_write
 from translator_core.tasks import TextTasks
 from translator_preview.protocol import encode, request
@@ -65,6 +65,7 @@ class StoreCase(unittest.TestCase):
                 self.assertEqual(recipe_binding(recipe), sha(raw))
                 if version == 1: self.assertNotIn("contextVersion", recipe)
 
+    @unittest.skipUnless(sys.platform == "darwin", "Frozen NLTokenizer boundary evidence applies to Mac only")
     def test_all_frozen_native_splits_and_foundation_trim_are_equal(self):
         frozen = json.loads(SPLITS.read_bytes())
         for case in frozen["cases"]:
@@ -75,7 +76,7 @@ class StoreCase(unittest.TestCase):
         for source, expected in frozen["trims"].items(): self.assertEqual(trim(source), expected)
 
     def test_oversized_grapheme_fails_without_losing_saved_input(self):
-        self.core.boundaries = MacBoundaries(HELPER)
+        self.core.boundaries = MacBoundaries(HELPER) if sys.platform == "darwin" else QtBoundaries()
         source = "e" + "\u0301" * 1500
         self.core.create(source, "en-zh")
         self.assertEqual(self.core.run("generation", threading.Event(), lambda _: None), "failed")
@@ -136,12 +137,69 @@ class StoreCase(unittest.TestCase):
         with self.assertRaises(CoreError): self.core.run("g", threading.Event(), lambda _: None)
         self.assertEqual(asset.read_bytes(), b"mismatched")
 
-    def test_asset_path_traversal_and_symlink_are_rejected(self):
+    def test_asset_path_traversal_and_windows_aliases_are_rejected(self):
         task = self.imported(); task["revision"] = 3; task["asset"]["filename"] = "..\\escape.txt"
         with self.assertRaises(CoreError): self.store.save(task)
+        for name in ("current.json ", "CURRENT.JSON", "source.txt.", "CON.txt", "source.txt:stream"):
+            task["asset"]["filename"] = name
+            with self.subTest(name=name), self.assertRaises(CoreError): self.store.save(task)
+
+    def test_asset_symlink_is_rejected(self):
+        self.imported()
         task = self.core.task; folder = self.store.directory(task["id"]); source = folder / task["asset"]["filename"]
-        source.unlink(); source.symlink_to(OLD / task["asset"]["filename"])
+        source.unlink()
+        try: source.symlink_to(OLD / task["asset"]["filename"])
+        except OSError:
+            if sys.platform != "win32": raise
+            self.skipTest("Windows user cannot create file symlinks; native junction protection checked separately")
         with self.assertRaises(CoreError): self.store.verify_asset(task, folder)
+
+    @unittest.skipUnless(sys.platform == "win32", "Native NTFS junction check applies to Windows only")
+    def test_windows_junction_cannot_import_or_replace_external_task(self):
+        external = Path(self.temp.name) / "external"; external.mkdir()
+        junction = Path(self.temp.name) / "junction"
+        subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(external)],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        try:
+            with self.assertRaises(CoreError): TaskStore(junction / "preview")
+            with self.assertRaises(CoreError): self.store.import_copy(junction)
+            self.assertEqual(list(external.iterdir()), [])
+        finally: junction.rmdir()
+
+    def test_qt_unicode_packing_keeps_graphemes_complete_and_source_exact(self):
+        boundaries = QtBoundaries()
+        family = "👨‍👩‍👧‍👦"
+        for source in ("e\u0301" * 40, family * 8, "\r\n" + "中文句子。下一句。\n" * 8):
+            parts = split(source, boundaries, threading.Event(), 40)
+            self.assertEqual("".join(p["source"] for p in parts), source)
+            self.assertTrue(all(len(p["source"].encode()) <= 40 for p in parts))
+            if source.startswith(family):
+                self.assertTrue(all(p["source"] == family for p in parts))
+            if source.startswith("e"):
+                self.assertTrue(all(p["source"].endswith("\u0301") for p in parts))
+
+    def test_new_adapter_identity_never_rewrites_legacy_plan_or_recipe(self):
+        task = self.imported(); original = foundation_json(task["configuration"])
+        class Boundaries:
+            splitter_version = "qt6102-unicode-utf8-v1"
+            def __call__(self, *_): raise AssertionError("Legacy plan must not be split again")
+        self.core.boundaries = Boundaries()
+        class Engine:
+            def __init__(self, **kwargs): pass
+            def translate(self, source, recipe): return fake_result(source, recipe)
+        self.core.engine_factory = Engine
+        self.assertEqual(self.core.run("g", threading.Event(), lambda _: None), "completed")
+        self.assertEqual(foundation_json(self.core.task["configuration"]), original)
+        fresh = TextTasks(self.store, QtBoundaries(), Engine)
+        fresh.create("New Windows plan.\n", "en-zh")
+        self.assertEqual(fresh.task["configuration"]["splitterVersion"], "qt6102-unicode-utf8-v1")
+        self.assertEqual(fresh.run("fresh", threading.Event(), lambda _: None), "completed")
+        self.core.create("Mac draft with no plan.", "en-zh")
+        self.core.task["configuration"]["splitterVersion"] = "natural-language-utf8-v1"
+        before = foundation_json(self.core.task)
+        with self.assertRaises(CoreError) as failure: self.core.run("draft", threading.Event(), lambda _: None)
+        self.assertEqual(failure.exception.code, "boundary_adapter_mismatch")
+        self.assertEqual(before, foundation_json(self.core.task))
 
     def test_binding_mismatch_and_uuid_collision_do_not_replace_original(self):
         task = self.imported(); folder = self.store.directory(task["id"]); original = (folder / "current.json").read_bytes()

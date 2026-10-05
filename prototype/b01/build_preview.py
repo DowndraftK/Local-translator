@@ -83,7 +83,7 @@ def main():
     files = sorted(p for root in (source, project / "shared") for p in root.rglob("*")
                    if p.is_file() and "__pycache__" not in p.parts)
     files += sorted((project / "fixtures/b01").glob("swift-recipe-*.json"))
-    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": "b02-preview.1",
+    identity = {"schema": 1, "product_version": "0.2.11", "preview_id": "b02-preview.2",
         "build_id": build_id, "mac_build": mac_build,
         "native_platform": sys.platform, "machine": platform.machine(),
         "built_at": datetime.now(timezone.utc).isoformat(), "branch": branch,
@@ -91,7 +91,7 @@ def main():
         "working_tree_modified": bool(run("git", "-C", project, "status", "--porcelain")),
         "source_files": {str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
         "python_version": platform.python_version(), "python_executable": sys.executable,
-        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 1}, "shared_core": "b02-text.1",
+        "qt_version": qVersion(), "protocol": {"major": 1, "minor": 1}, "shared_core": "b02-text.2",
         "preview_task_root": str(project / "artifacts/b02-20261004/tasks"),
         "dependency_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "dependencies": {item["name"]: item["version"] for item in lock["packages"]},
@@ -100,6 +100,9 @@ def main():
         identity["platform_adapter"] = {"name": "Foundation-Character-NaturalLanguage-boundaries-v1",
                                        "binary_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),
                                        "compiler": run("swiftc", "--version")}
+    else:
+        identity["platform_adapter"] = {"name": "Qt-QTextBoundaryFinder-6.10.2",
+                                       "splitter_version": "qt6102-unicode-utf8-v1"}
     (package / "build-identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     for path in package.rglob("*.py"):
         target = output / "compile-check" / path.relative_to(package).with_suffix(".pyc")
