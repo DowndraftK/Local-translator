@@ -74,7 +74,7 @@ class Peer:
   for part in task['text']['segments']:
    assert part['source'] in value
    if part['state']=='completed':assert part['result']['translation'] in value
-  (P/f'artifacts/b02-20261004/{label}-bilingual.txt').write_bytes(raw);return {'bytes':len(raw),'sha256':sha(raw)}
+  (EVIDENCE/f'{label}-bilingual.txt').write_bytes(raw);return {'bytes':len(raw),'sha256':sha(raw)}
  def close(self):
   self.send('shutdown');ack=self.until('shutdown.confirmed');code=self.process.wait(timeout=8);assert ack['tail_drained'] and code==0
   self.reader.join(2);error=self.process.stderr.read().decode()
@@ -109,5 +109,5 @@ finally:
  if peer and peer.process.poll() is None:
   try:report['cleanup_worker']=peer.close()
   except Exception as e:report['cleanup_error']=str(e)
- (EVIDENCE/'mac-worker-real-flow.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+ (EVIDENCE/'native-worker-real-flow.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
 print('all real-flow checks passed',flush=True)
