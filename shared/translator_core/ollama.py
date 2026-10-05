@@ -211,6 +211,13 @@ class Ollama:
             translation = "".join(pieces)
             if final is None or not trim(translation):
                 raise CoreError("响应中断或译文为空；未确认成功。", "incomplete", False)
+        except (OSError, http.client.HTTPException) as exc:
+            # HTTPResponse is consumed by this caller after _request yields.
+            # Windows can raise WSAECONNABORTED during an owned cancellation,
+            # rather than returning EOF. Cancellation must retain its identity;
+            # an unsolicited read error remains a service failure.
+            self.check()
+            raise CoreError("本地服务流读取中断，请检查后主动继续。", "service_unavailable") from exc
         finally: generator.close()
         result = dict(source=source, translation=translation, model=recipe["model"], direction=recipe["direction"],
                       elapsedSeconds=time.monotonic() - start, warnings=content_warnings(source, translation),

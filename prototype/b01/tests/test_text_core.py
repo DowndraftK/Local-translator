@@ -397,6 +397,24 @@ class OllamaCase(unittest.TestCase):
         self.assertEqual(result["translation"], "已确认译文。")
         self.assertGreater(result["elapsedSeconds"], .3)
 
+    def test_stream_connection_abort_retains_cancel_or_service_failure_identity(self):
+        # Reproduce Windows' post-header ConnectionAbortedError on both OSes.
+        # The same read error without an owned cancel is never a success/cancel.
+        from unittest.mock import patch
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                engine = Ollama(self.api.address)
+                class Response:
+                    def readline(self, _):
+                        if cancel: engine.cancelled.set()
+                        raise ConnectionAbortedError(10053, "Owned stream aborted")
+                def request_stream(*_, **__): yield Response()
+                with patch.object(engine, "verify", return_value={"capabilities": ["completion"]}), \
+                     patch.object(engine, "_request", side_effect=request_stream):
+                    with self.assertRaises(Cancelled if cancel else CoreError) as failure:
+                        engine.translate("source", self.recipe)
+                    if not cancel: self.assertEqual(failure.exception.code, "service_unavailable")
+
 
 class WorkerTextCase(unittest.TestCase):
     def setUp(self):

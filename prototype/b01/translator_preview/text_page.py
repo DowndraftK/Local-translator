@@ -48,7 +48,7 @@ class TextPage(QWidget):
         box.addWidget(self.output, 1)
         self.export_button = QPushButton("导出完整双语 TXT…"); box.addWidget(self.export_button)
         splitter.addWidget(left); splitter.addWidget(right); splitter.setSizes([210, 650]); outer.addWidget(splitter, 1)
-        self.notice = QLabel("任务保存在独立预览目录；旧任务只按你的选择导入副本。Windows本机流程待后续验证。")
+        self.notice = QLabel("任务保存在独立预览目录；旧任务只按你的选择导入副本。关闭窗口会等待保存与工作进程安全结束。")
         self.notice.setObjectName("muted"); self.notice.setWordWrap(True); outer.addWidget(self.notice)
         self.new.clicked.connect(self.new_task); self.create.clicked.connect(self.create_task)
         self.save.clicked.connect(lambda: self.send("task.save"))

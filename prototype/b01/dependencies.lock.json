@@ -1,10 +1,19 @@
 {
   "schema": 1,
-  "scope": "B01 isolated development environment; not a distributable runtime",
+  "scope": "B01/B02 isolated native development environments; not a distributable runtime",
   "python": {
     "version": "3.12.14",
     "mac_existing_build": "20260825",
-    "windows_verified": false
+    "windows_archive": {
+      "provider": "astral-sh/python-build-standalone",
+      "build": "20260825",
+      "architecture": "x86_64-pc-windows-msvc",
+      "filename": "cpython-3.12.14+20260825-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260825/cpython-3.12.14%2B20260825-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "bytes": 21980002,
+      "sha256": "8e6aad12ef6fc9685e67ce66253f8f72d6e8fa02cb7187e5850bd4db5ecd9e2a",
+      "license_family": "PSF-2.0; bundled component license inventory remains separate"
+    }
   },
   "qt": "6.10.2",
   "packages": [
