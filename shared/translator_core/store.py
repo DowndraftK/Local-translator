@@ -284,10 +284,10 @@ class TaskStore:
                 if temp.exists(): shutil.rmtree(temp)
         return task, warning
 
-    def incoming(self, name, fingerprint, count):
+    def incoming(self, name, fingerprint, count, allow_empty=False):
         if (not isinstance(name, str) or len(name) != 36 or not name.endswith(".txt") or
                 any(c not in "0123456789abcdef" for c in name[:-4]) or
-                type(count) is not int or not 0 < count <= MAX_INPUT_BYTES):
+                type(count) is not int or not (0 if allow_empty else 1) <= count <= MAX_INPUT_BYTES):
             raise CoreError("输入暂存身份无效。", "unsafe_path")
         path = self.root / "incoming" / name
         data = safe_file(path, MAX_INPUT_BYTES)

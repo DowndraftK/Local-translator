@@ -177,7 +177,7 @@ def decode_snapshot(raw):
         raise CoreError("保存文件过大。")
     envelope = strict_json(raw)
     if not isinstance(envelope, dict): raise CoreError("保存文件不是对象。")
-    if type(envelope.get("schema")) is not int or envelope["schema"] != 1:
+    if type(envelope.get("schema")) is not int or envelope["schema"] not in (1,2):
         raise CoreError("不支持此保存版本；原文件保留。", "future_schema")
     try:
         payload = base64.b64decode(envelope["payload"], validate=True)
@@ -185,7 +185,11 @@ def decode_snapshot(raw):
         raise CoreError("保存文件base64无效。") from exc
     if len(payload) > MAX_SNAPSHOT_BYTES or sha(payload) != envelope.get("checksum"):
         raise CoreError("任务checksum不匹配。", "snapshot_corrupt")
-    task = strict_json(payload); validate_task(task)
+    task = strict_json(payload)
+    if (envelope['schema']==2 and task.get('formatVersion')!=2 or
+            envelope['schema']==1 and task.get('formatVersion') not in (None,1)):
+        raise CoreError("保存版本与有效字段不匹配。", "future_schema")
+    validate_task(task)
     return task
 
 
@@ -194,7 +198,9 @@ def encode_snapshot(task):
     payload = foundation_json(task)
     if len(payload) > MAX_SNAPSHOT_BYTES:
         raise CoreError("任务快照超出预览容量。")
-    return foundation_json({"schema": 1, "checksum": sha(payload), "payload": base64.b64encode(payload).decode()})
+    schema=task.get('formatVersion',1)
+    if schema not in (1,2): raise CoreError("不支持此保存版本。", "future_schema")
+    return foundation_json({"schema": schema, "checksum": sha(payload), "payload": base64.b64encode(payload).decode()})
 
 
 def recover_in_memory(task):

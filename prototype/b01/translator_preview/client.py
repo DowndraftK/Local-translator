@@ -41,6 +41,7 @@ class WorkerClient(QObject):
         self.endpoint = endpoint
         self.pdf_helper, self.pdf_library = pdf_helper, pdf_library
         self.current_task = None
+        self.can_change_task = lambda: True
         self.transfer = None
         self.operation_kind = None
         self.heartbeat = QTimer(self); self.heartbeat.setInterval(5000)
@@ -84,7 +85,9 @@ class WorkerClient(QObject):
     def send(self, kind, **fields):
         if not self.process or self.process.state() != QProcess.Running:
             return None
-        if kind in ("task.save", "task.export") and self.current_task:
+        if kind in ('task.create','task.open','task.import','document.create','document.fork') and not self.can_change_task():
+            return None
+        if kind in ("task.save", "task.export", 'document.draft', 'document.apply', 'document.discard', 'document.review', 'document.fork') and self.current_task:
             fields.setdefault("task_id", self.current_task["id"])
             fields.setdefault("revision", self.current_task["revision"])
         message = request(kind, self.session_id, **fields)
@@ -158,7 +161,7 @@ class WorkerClient(QObject):
         elif kind == "task.exported" and request_kind == "task.export":
             pass
         elif kind == "error":
-            if request_kind in ("task.start", "service.check", "document.select", "document.extract", "document.render"):
+            if request_kind in ("task.start", "service.check", "document.select", "document.extract", "document.ocr", "document.render"):
                 self.operation = None; self.heartbeat.stop(); self.set_state("ready")
         else:
             raise ProtocolError("unexpected_event")
@@ -201,7 +204,8 @@ class WorkerClient(QObject):
 
     def start_operation(self, kind, **fields):
         if self.state != "ready": return False
-        if kind in ("task.start", "document.extract", "document.render") and self.current_task:
+        if kind == 'document.select' and not self.can_change_task(): return False
+        if kind in ("task.start", "document.extract", "document.ocr", "document.render") and self.current_task:
             fields.setdefault("task_id", self.current_task["id"])
             fields.setdefault("revision", self.current_task["revision"])
         self.terminal = None; self.operation_kind = kind

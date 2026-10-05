@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import uuid
+import sys
 from pathlib import Path
 
 class NativePeer:
@@ -18,7 +19,8 @@ class NativePeer:
               '--task-root',str(root),'--boundary-helper',str(self.package/'shared/platform/macos/text-boundaries'),
               '--pdf-helper',str(self.package/'shared/platform/macos/pdf-facts'),'--pdf-library',str(self.package/'vendor/pdfium'),
               '--endpoint',endpoint]
-        self.process=subprocess.Popen(args,env=owned_environment(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.process=subprocess.Popen(args,env=owned_environment(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                      creationflags=subprocess.CREATE_NO_WINDOW if sys.platform=='win32' else 0)
         self.reader=threading.Thread(target=self.read,daemon=True);self.reader.start()
         self.send('hello');self.ready=self.until('ready')
     def read(self):
@@ -27,7 +29,7 @@ class NativePeer:
             except Exception as exc:self.events.put(exc);return
     def send(self,kind,**fields):
         from translator_preview.protocol import request,encode
-        if kind in ('document.extract','document.render','document.ocr','task.start','task.save','task.export') and self.saved:
+        if kind in ('document.extract','document.render','document.ocr','task.start','task.save','task.export','document.draft','document.apply','document.discard','document.review','document.fork') and self.saved:
             fields.setdefault('task_id',self.saved['task']['id']);fields.setdefault('revision',self.saved['task']['revision'])
         req=request(kind,self.session,**fields);self.process.stdin.write(encode(req));self.process.stdin.flush();return req
     def next(self,timeout=1):

@@ -23,7 +23,10 @@ def main():
                 gui_verified=False,cases=[],real_translation=args.real_translation)
     peer=NativePeer(package,root);report['ready']=peer.ready
     def selection(name):
+        (evidence/'accept-progress.json').write_text(json.dumps(dict(step='selecting',name=name,cases=len(report['cases']))))
+        print('select',name,flush=True)
         event,seconds,_=peer.operate('document.select',source_path=str(args.materials.resolve()/name))
+        (evidence/'accept-progress.json').write_text(json.dumps(dict(step='selected',name=name,status=event['status'],cases=len(report['cases']))))
         return event,seconds
     def create(name,first,last,direction='en-zh'):
         event,seconds=selection(name);assert event['status']=='completed',event
@@ -89,6 +92,7 @@ def main():
             report['cases'].append(dict(name='real-txt-translation',seconds=seconds,export=export('txt-translated')))
         report['final_worker_exit']=peer.close();report['passed']=True
     finally:
+        print('writing final report',flush=True)
         (evidence/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         (evidence/'trace.json').write_text(json.dumps(peer.trace,ensure_ascii=False,indent=2),encoding='utf-8')
         if peer.process.poll() is None:peer.close()

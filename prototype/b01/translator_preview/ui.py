@@ -60,24 +60,24 @@ class PreviewWindow(QMainWindow):
         self.client = WorkerClient(self, task_root=task_root.absolute(), boundary_helper=boundary_helper,
                                    pdf_helper=pdf_helper, pdf_library=pdf_library)
         self.evidence["preview_task_root"] = str(task_root)
-        self.setWindowTitle("本地翻译器 · B03 文档预览")
+        self.setWindowTitle("本地翻译器 · B04 文档核对预览")
         self.resize(1100, 760); self.setMinimumSize(860, 600)
         root = QWidget(); self.setCentralWidget(root)
         layout = QHBoxLayout(root); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
         sidebar = QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(245)
         side = QVBoxLayout(sidebar); side.setContentsMargins(24, 30, 20, 24)
         brand = QLabel("本地翻译器"); brand.setObjectName("brand"); side.addWidget(brand)
-        small = QLabel("共享桌面界面 · B03"); small.setObjectName("muted"); side.addWidget(small)
+        small = QLabel("共享桌面界面 · B04"); small.setObjectName("muted"); side.addWidget(small)
         self.nav = QListWidget(); self.nav.setObjectName("navigation")
         self.nav.addItems(["连接与能力", "文字翻译", "文档与图片", "录音与字幕", "资源与安装"])
         side.addWidget(self.nav); side.addStretch()
-        foot = QLabel("0.2.11 · 开发预览\n本次实施 B03\n旧 Mac 应用独立保留")
+        foot = QLabel("0.2.11 · 开发预览\n本次实施至 B04\n旧 Mac 应用独立保留")
         foot.setWordWrap(True); foot.setObjectName("muted"); side.addWidget(foot)
         layout.addWidget(sidebar)
         main = QVBoxLayout(); main.setContentsMargins(30, 28, 30, 24); main.setSpacing(14)
         layout.addLayout(main)
         title = QLabel("连接与能力"); title.setObjectName("title"); main.addWidget(title)
-        note = QLabel("文字、PDF文字层与UTF-8 TXT可独立保存和回看来源。打开不自动推理。")
+        note = QLabel("文字、PDF/TXT与显式OCR可独立保存、核对和回看来源。打开不自动推理。")
         note.setWordWrap(True); note.setObjectName("muted"); main.addWidget(note)
         identity = QLabel(f"候选 {self.identity['build_id']}  ·  协议 {PROTOCOL['major']}.{PROTOCOL['minor']}  ·  {platform.system()} / {platform.machine()}")
         identity.setObjectName("muted"); main.addWidget(identity)
@@ -158,7 +158,7 @@ class PreviewWindow(QMainWindow):
             self.timeline.appendPlainText("本地工作进程已真实确认启动；未加载模型或打开旧任务。")
             for index, (key, _, _) in enumerate(FEATURES):
                 state = event["diagnostics"]["capabilities"].get(key)
-                self.table.item(index, 1).setText("已就绪" if state == "ready" else "TXT就绪，PDF适配器缺失" if state == "txt_ready_pdf_adapter_missing" else "尚未实现")
+                self.table.item(index, 1).setText("已就绪" if state == "ready" else "部分语言可用，缺英语资源" if state == 'partial_offline_languages' else "TXT就绪，PDF适配器缺失" if state == "txt_ready_pdf_adapter_missing" else "尚未实现")
             if self.screenshot_path:
                 QTimer.singleShot(300, self.capture_window)
         elif kind == "progress":
@@ -183,6 +183,8 @@ class PreviewWindow(QMainWindow):
         self.grab().save(str(path))
 
     def closeEvent(self, event):
+        if not self.document_page.prepare_close(self.close):
+            event.ignore(); return
         if self.client.process and self.client.process.state() != QProcess.NotRunning:
             event.ignore()
             if not self.close_pending:

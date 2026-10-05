@@ -50,7 +50,10 @@ def validate_document_task(task):
         by_id[p["id"]] = p
     if sum(len(p["text"].encode()) for p in pages) > MAX_INPUT_BYTES:
         raise CoreError("所选页累计文字超出1MiB UTF-8保护。", "resource_limit")
-    if any(not str(n).isdigit() or int(n) not in by_id or not isinstance(body, str) for n, body in task["drafts"].items()):
+    if task.get('formatVersion')==2:
+        from .ocr_contracts import validate_ocr
+        validate_ocr(task,by_id)
+    elif any(not str(n).isdigit() or int(n) not in by_id or not isinstance(body, str) for n, body in task["drafts"].items()):
         raise CoreError("草稿来源页不匹配。", "draft_revision_mismatch")
     plan, sources = d.get("segments"), d.get("sources")
     if not isinstance(plan, list) or not isinstance(sources, list) or len(plan) != len(sources) or len(plan) > 4096:
@@ -147,9 +150,13 @@ def document_text(task, only_page=None):
         if page.get("issue"): out.append("页提示：" + page["issue"])
         raw = page.get("ocr")
         if raw:
-            out.extend([f"渲染：{raw['pixelWidth']}×{raw['pixelHeight']} · rotation={raw['rotation']} · cropBox={raw['cropBox']}",
+            out.extend([f"原始OCR身份：{raw.get('rawRevision','旧格式未单列')} · 引擎：{raw.get('backend',d.get('extractionProfile'))}",
+                        f"渲染：{raw['pixelWidth']}×{raw['pixelHeight']} · rotation={raw['rotation']} · cropBox={raw['cropBox']}",
                         "坐标：" + raw["coordinateSystem"], "[原始OCR观察项：顺序/ID/置信度/坐标/文字]"])
             for o in raw["observations"]: out.append(f"{o['order']} / {o['id']} / {o['confidence']} / {o['rect']} / {o['text']}")
+            if raw.get('rawText') is not None: out.extend(['[完整原始识别文字]',raw['rawText']])
+        if page.get('effectiveSource'):out.append('有效来源归属：'+str(page['effectiveSource']))
+        if page.get('reviewRevision'):out.append('人工核对归属：'+page['reviewRevision'])
         out.extend(["[全部已获得的有效原文]", page["text"], "[对应译文]"])
         mapping = [m for m in d["sources"] if m["page"] == page["id"]]
         if not mapping: out.append("【尚未建立翻译计划】" if trim(page["text"]) else "【未获得可翻译原文；" + PAGE_LABELS[page["state"]] + "】")

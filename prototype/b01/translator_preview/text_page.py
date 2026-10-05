@@ -83,6 +83,7 @@ class TextPage(QWidget):
         self.pending_request = self.client.send(kind, **fields)
         if self.pending_request is None:
             self.pending = False; self.update_controls(self.client.state)
+            self.status.setText('请求未发送；请先等待文档页编辑草稿保存确认或恢复工作进程。')
 
     def operate(self, kind, **fields):
         self.operation_request = self.client.start_operation(kind, **fields)

@@ -2,10 +2,10 @@
 import json
 import uuid
 
-PROTOCOL = {"major": 1, "minor": 2}
+PROTOCOL = {"major": 1, "minor": 3}
 MAX_FRAME_BYTES = 65536
 STARTUP_TIMEOUT_MS = 30000
-SHUTDOWN_TIMEOUT_MS = 5000
+SHUTDOWN_TIMEOUT_MS = 10000  # current native page terminate/wait (5s) plus finite tail
 MAX_STEPS = 40
 SNAPSHOT_CHUNK_BYTES = 16384
 MAX_TRANSFER_BYTES = 32 * 1024 * 1024

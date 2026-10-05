@@ -47,6 +47,10 @@ def snapshots():
     return {str(p.relative_to(tasks)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in tasks.glob('*/current.json')}
 
+def checkpoint(stage):
+    report['stage']=stage
+    (evidence/'actual-process-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+
 try:
     # Reuse an existing compatible loopback service. Start only this official
     # fixed engine when the loopback port is genuinely unbound.
@@ -63,6 +67,7 @@ try:
         with (evidence / 'ollama.stdout.log').open('wb') as out, (evidence / 'ollama.stderr.log').open('wb') as err:
             server = OwnedWindowsProcess([str(engine), 'serve'], env=environment, stdout=out, stderr=err)
         report['owned_server_pid'] = server.pid
+        checkpoint('owned-service-started')
         for attempt in range(60):
             if server.poll() is not None: raise RuntimeError('Owned engine exited before startup')
             try:
@@ -73,16 +78,20 @@ try:
     report['reused_original_service'] = occupied
     report['verified_service'] = Ollama().verify(default_recipe('en-zh'))
     report['snapshots_before'] = snapshots()
+    checkpoint('service-verified')
     print('请在窗口中验证：无模型开始/取消/停止/重连；文字保存、主动翻译和TXT导出。')
     print('关闭后，再次双击本入口，打开已保存任务并确认没有自动翻译。')
     print('长文样本在本目录 GUI-长文样本.txt，可另建任务验证取消和主动继续。', flush=True)
     with (evidence / 'ui.stdout.log').open('wb') as out, (evidence / 'ui.stderr.log').open('wb') as err:
         ui = subprocess.Popen([owned_python(), '-I', '-B', '-X', 'utf8', str(package / 'launch.py'),
             '--evidence', str(evidence / 'ui-events.json'), '--screenshot', str(evidence / 'window.png'),
-            '--task-root', str(tasks)], env=owned_environment(), cwd=package, stdout=out, stderr=err)
+            '--task-root', str(tasks)], env=owned_environment(), cwd=package, stdout=out, stderr=err,
+            creationflags=subprocess.CREATE_NO_WINDOW)
     report['actual_ui_pid'] = ui.pid
+    checkpoint('desktop-ui-running')
     report['ui_exit_code'] = ui.wait()
     report['snapshots_after'] = snapshots()
+    checkpoint('actual-ui-exited')
     print('实际窗口进程退出码：', report['ui_exit_code'], flush=True)
 finally:
     if server and (ui is None or ui.poll() is not None):
@@ -92,5 +101,5 @@ finally:
         report['owned_server_kept_for_live_ui'] = True
     report['final_process_audit_pending'] = True
     report['ownership_policy'] = 'suspended CreateProcessW; private KILL_ON_JOB_CLOSE; assignment before resume; shared service untouched'
-    (evidence / 'actual-process-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    checkpoint('owned-service-closed' if report.get('owned_job_closed_kills_descendants') else 'shared-service-preserved')
     print('本次详细证据：', evidence, flush=True)

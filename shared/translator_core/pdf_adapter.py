@@ -17,15 +17,19 @@ MAX_IMAGE_BYTES = 40_000_000  # one 9M-pixel RGBA image plus bounded PNG overhea
 
 
 class PDFAdapter:
-    def __init__(self, root, command):
+    def command_for(self, request_path, result_path):
+        return self.command + [str(request_path), str(result_path)]
+
+    def __init__(self, root, command, probe='probe'):
         self.root, self.command = Path(root).absolute(), list(map(str, command))
         if is_link(self.root): raise CoreError("页暂存目录不安全。", "unsafe_path")
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.identity = None; self.verified = False
-        result = self.call("probe", cancel=threading.Event())
+        result = self.call(probe, cancel=threading.Event())
+        self.probe = result
         self.identity = result["backend"]; self.verified = True
 
-    def call(self, action, source=None, fingerprint=None, page=None, cancel=None):
+    def call(self, action, source=None, fingerprint=None, page=None, cancel=None, fields=None, limit=MAX_INPUT_BYTES + 65536):
         cancel = cancel or threading.Event()
         if cancel.is_set(): raise Cancelled()
         if source is not None and file_identity(source, cancel=cancel)[1] != fingerprint:
@@ -35,6 +39,7 @@ class PDFAdapter:
         request = dict(schema=1, request=request_id, action=action)
         if source is not None: request.update(source=str(source), fingerprint=fingerprint)
         if page is not None: request["page"] = page
+        if fields: request.update(fields)
         if action == "render": request["image"] = str(folder / "page.png")
         request_path, result_path = folder / "request.json", folder / "result.json"
         atomic_write(json.dumps(request, ensure_ascii=False).encode(), request_path)
@@ -42,8 +47,9 @@ class PDFAdapter:
         keep_image = False
         try:
             with (folder / "stderr").open("wb") as error:
-                process = subprocess.Popen(self.command + [str(request_path), str(result_path)],
-                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=error)
+                process = subprocess.Popen(self.command_for(request_path, result_path),
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=error,
+                                           creationflags=subprocess.CREATE_NO_WINDOW if sys.platform=='win32' else 0)
                 deadline = time.monotonic() + 60
                 while process.poll() is None:
                     if cancel.wait(.03):
@@ -58,7 +64,7 @@ class PDFAdapter:
             if process.returncode:
                 error = safe_file(folder / "stderr", 8192).decode("utf-8", "replace")
                 raise CoreError("本地PDF处理失败：" + error, "pdf_adapter_error", False)
-            raw = safe_file(result_path, MAX_INPUT_BYTES + 65536)
+            raw = safe_file(result_path, limit)
             result = strict_json(raw)
             if (not isinstance(result, dict) or result.get("schema") != 1 or result.get("request") != request_id or
                     result.get("action") != action or result.get("complete") is not True or not isinstance(result.get("backend"), str) or

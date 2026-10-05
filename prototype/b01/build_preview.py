@@ -138,6 +138,10 @@ def main():
     identity["pdf_adapter"] = {"identity": pdf_probe.identity, "actual_probe_confirmed": pdf_probe.verified,
                                "render_max_edge": 3000, "render_max_pixels": 9000000,
                                "library_lock_sha256": hashlib.sha256((source / "pdf-dependencies.lock.json").read_bytes()).hexdigest()}
+    from translator_core.ocr_adapter import platform_ocr_adapter
+    ocr_probe = platform_ocr_adapter(output / 'ocr-probe', pdf_probe, pdf_helper if sys.platform=='darwin' else None)
+    identity['ocr_adapter'] = dict(identity=ocr_probe.identity,actual_probe_confirmed=ocr_probe.verified,
+                                   available_languages=ocr_probe.languages,profile=ocr_probe.probe['profile'])
     (package / "build-identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
     for path in package.rglob("*.py"):
         target = output / "compile-check" / path.relative_to(package).with_suffix(".pyc")
