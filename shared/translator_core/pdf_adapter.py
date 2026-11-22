@@ -40,7 +40,7 @@ class PDFAdapter:
         if source is not None: request.update(source=str(source), fingerprint=fingerprint)
         if page is not None: request["page"] = page
         if fields: request.update(fields)
-        if action == "render": request["image"] = str(folder / "page.png")
+        if action in ("render", 'image_render'): request["image"] = str(folder / "page.png")
         request_path, result_path = folder / "request.json", folder / "result.json"
         atomic_write(json.dumps(request, ensure_ascii=False).encode(), request_path)
         process = None
@@ -58,12 +58,15 @@ class PDFAdapter:
                         except subprocess.TimeoutExpired: process.kill(); process.wait()
                         raise Cancelled()
                     if time.monotonic() > deadline:
-                        process.kill(); process.wait()
+                        process.terminate()
+                        try:process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:process.kill();process.wait()
                         raise CoreError("当前页事实处理超过60秒，已停止此自有适配进程。", "adapter_timeout")
             if cancel.is_set(): raise Cancelled()
             if process.returncode:
                 error = safe_file(folder / "stderr", 8192).decode("utf-8", "replace")
-                raise CoreError("本地PDF处理失败：" + error, "pdf_adapter_error", False)
+                raise CoreError(getattr(self,'error_label','本地PDF处理失败：') + error,
+                    getattr(self,'error_code','pdf_adapter_error'), False)
             raw = safe_file(result_path, limit)
             result = strict_json(raw)
             if (not isinstance(result, dict) or result.get("schema") != 1 or result.get("request") != request_id or
@@ -74,10 +77,10 @@ class PDFAdapter:
                 raise CoreError("事实文件响应/来源/页/后端身份不匹配。", "adapter_identity_mismatch")
             if action == "metadata" and (type(result.get("totalPages")) is not int or result["totalPages"] < 1):
                 raise CoreError("PDF没有有效物理页。")
-            if action == "render":
+            if action in ("render", 'image_render'):
                 image = result.get("image", {}); width, height = image.get("pixelWidth"), image.get("pixelHeight")
                 if (type(width) is not int or type(height) is not int or not 0 < width <= 3000 or not 0 < height <= 3000 or
-                        width * height > 9_000_000 or image.get("rotation") not in (0, 90, 180, 270) or
+                        width * height > 9_000_000 or action=='render' and image.get("rotation") not in (0, 90, 180, 270) or
                         type(image.get("scale")) not in (int, float) or not math.isfinite(image["scale"]) or not 0 < image["scale"] <= 3):
                     raise CoreError("渲染结果超出固定像素/方向边界。", "resource_limit")
                 image_path = folder / "page.png"
@@ -89,7 +92,10 @@ class PDFAdapter:
                 keep_image = True
             return result
         finally:
-            if process and process.poll() is None: process.kill(); process.wait()
+            if process and process.poll() is None:
+                process.terminate()
+                try:process.wait(timeout=5)
+                except subprocess.TimeoutExpired:process.kill();process.wait()
             for name in ("request.json", "result.json", "stderr"): (folder / name).unlink(missing_ok=True)
             if not keep_image: shutil.rmtree(folder)
 

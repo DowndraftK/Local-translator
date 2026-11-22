@@ -1,0 +1,14 @@
+{
+  "repo": "mlx-community/whisper-small.en-fp16",
+  "revision": "f8ff44ec66c4b1748fb2e3eb13b3b521a0bdfea8",
+  "files": {
+    "model.safetensors": {
+      "size": 481213970,
+      "sha256": "36375db96d2900eceb62ed9fe43dec23854266adc6d7ad827f661b81fb0893b4"
+    },
+    "config.json": {
+      "size": 266,
+      "sha256": "40028e43687458e79ba89cc16bf14184c5414a5cbc00fd511f8f78d138647afd"
+    }
+  }
+}

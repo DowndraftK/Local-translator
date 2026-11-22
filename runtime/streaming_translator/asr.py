@@ -88,11 +88,17 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
         else:
             with wave.open(str(audio_path), 'rb') as source:
                 output.writeframes(source.readframes(48000))
+    model_size = config.get('model_variant', 'large-v3-turbo')
+    if model_size not in ('large-v3-turbo', 'small.en'):
+        raise ValueError('语音模型规格不受支持。')
+    language = config.get('language', 'en')
+    if language not in ('en','zh','ja','ru','ko','es','pt') or model_size=='small.en' and language!='en':
+        raise ValueError('所选 Whisper 模型不支持当前原文语言。')
+    model_path = str(Path(config['model']).resolve())
     cfg = WhisperLiveKitConfig(backend='mlx-whisper', backend_policy='simulstreaming',
-        model_size='large-v3-turbo', encoder_model_path=str(Path(config['model']).resolve()),
-        decoder_model_path=str(Path(config['model']).resolve()),
-        custom_alignment_heads=_ALIGNMENT_HEADS['large-v3-turbo'].decode('ascii'),
-        decoder_device=device, decoder_dtype=dtype, lan='en', pcm_input=True,
+        model_size=model_size, encoder_model_path=model_path, decoder_model_path=model_path,
+        custom_alignment_heads=_ALIGNMENT_HEADS[model_size].decode('ascii'),
+        decoder_device=device, decoder_dtype=dtype, lan=language, pcm_input=True,
         diarization=False, target_language='', warmup_file=str(warmup.resolve()),
         vac=config.get('vad', True),
         min_chunk_size=.5, asr_coalesce_min_s=config.get('coalesce_seconds', .5), retention_seconds=60,
@@ -209,7 +215,7 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
                 store.ingest(sequence, values)
                 sequence += 1
 
-    processor = DurableProcessor(transcription_engine=engine, mode='diff', language='en')
+    processor = DurableProcessor(transcription_engine=engine, mode='diff', language=language)
     alignatt = processor.transcription.model
     parameters = list(alignatt.model.decoder.parameters())
     evidence = {'decoder_devices': sorted({str(p.device) for p in parameters}),
@@ -314,7 +320,7 @@ async def recognize(store, config, input_path, paced, stop, max_audio_seconds=No
                     store.checkpoint(sent_samples, prefix_hasher.digest(sent_samples), resource_fingerprint)
                     processed_pauses.add(boundary['id'])
                     origin = sent_samples
-                    processor = DurableProcessor(transcription_engine=engine, mode='diff', language='en')
+                    processor = DurableProcessor(transcription_engine=engine, mode='diff', language=language)
                     await start_processor()
                     store.update(capture_state=boundary['kind'])
                 if archive:

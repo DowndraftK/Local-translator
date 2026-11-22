@@ -106,6 +106,8 @@ class TaskStore:
         self.root = Path(root).absolute()
         self.write = write
         self.high_water = {}
+        self.expected_snapshots = {}
+        self.history_epoch = 0
         self.mutex = threading.RLock()
         if is_link(self.root):
             raise CoreError("预览任务根不能是符号链接。", "unsafe_path")
@@ -143,6 +145,9 @@ class TaskStore:
                 self.close(); raise CoreError("预览目录包含不安全路径。", "unsafe_path")
             folder.mkdir(exist_ok=True, mode=0o700)
 
+        from .history import HistoryRepository
+        self.history = HistoryRepository(self)
+
     def close(self):
         if getattr(self, "lock", None) and not self.lock.closed:
             self.lock.close()
@@ -174,9 +179,12 @@ class TaskStore:
         if name is None:
             return None
         asset = task["asset"]
-        if task.get("kind") == "文档":
+        if task.get("kind") in ("文档", '图片', '音频'):
             path = Path(directory) / name
-            count, fingerprint = file_identity(path)
+            from .images import MAX_SOURCE_BYTES
+            if task['kind'] in ('图片', '音频') and any(is_link(p) for p in (path,*path.parents)):
+                raise CoreError('图片封存路径包含链接。','unsafe_path')
+            count, fingerprint = file_identity(path, MAX_SOURCE_BYTES if task['kind']=='图片' else MAX_DOCUMENT_BYTES)
             if type(asset.get("byteCount")) is not int or count != asset["byteCount"] or fingerprint != asset.get("fingerprint"):
                 raise CoreError("封存源副本不匹配；仍可阅读/导出，禁止提取、识别或继续。", "source_mismatch")
             return path
@@ -209,20 +217,18 @@ class TaskStore:
             task, warning = self.read_directory(self.directory(identity), identity)
             self.high_water[task_id(identity)] = max(task["revision"], self.high_water.get(task_id(identity), 0))
             try: self.verify_asset(task, self.directory(identity))
-            except CoreError as exc: warning = (warning + "\n" if warning else "") + str(exc)
+            except (CoreError,OSError) as exc: warning = (warning + "\n" if warning else "") + str(exc)
+            current = self.directory(identity) / "current.json"
+            if current.is_file(): self.expected_snapshots[task_id(identity)] = sha(safe_file(current))
             return deepcopy(task), warning
 
     def list(self):
-        tasks, errors = [], []
-        for path in self.root.iterdir():
-            try: identity = task_id(path.name)
-            except CoreError: continue
-            try:
-                task, warning = self.read(identity)
-                tasks.append({"id": identity, "name": task["name"], "kind": task["kind"], "updated": task["updated"],
-                              "phase": (task.get("text") or {}).get("phase", (task.get("document") or {}).get("phase", "draft")), "warning": warning})
-            except CoreError as exc: errors.append(f"{identity}：{exc}")
-        return sorted(tasks, key=lambda item: item["updated"], reverse=True), errors
+        # Legacy callers use the same authority/summary mapping as the two UI views.
+        query = dict(version=self.history.description()['contract'],
+            owner=dict(root_id=self.history.root_id,session_id=self.history.session_id,
+                scope='history',view_revision=0,query_id=str(uuid.uuid4())),limit=20)
+        result=self.history.query(query)
+        return result['items'], [e['task_id']+'：'+e['message'] for e in result['errors']]
 
     def save(self, task, asset_data=None):
         encoded = encode_snapshot(task)
@@ -231,7 +237,11 @@ class TaskStore:
             directory = self.directory(identity); current = directory / "current.json"
             existing = None
             if current.exists() or is_link(current):
-                existing = safe_file(current); previous = decode_snapshot(existing)
+                existing = safe_file(current)
+                expected = self.expected_snapshots.get(identity)
+                if expected is not None and sha(existing) != expected:
+                    raise CoreError("磁盘任务已由外部替换，保留内存结果且拒绝覆盖。", "source_changed")
+                previous = decode_snapshot(existing)
                 if task_id(previous["id"]) != identity:
                     raise CoreError("任务目录身份不匹配。")
                 self.high_water[identity] = max(previous["revision"], self.high_water.get(identity, 0))
@@ -243,7 +253,7 @@ class TaskStore:
                 asset = directory / name
                 if not asset.exists() and not is_link(asset):
                     metadata = task["asset"]
-                    if isinstance(asset_data, Path) and task["kind"] == "文档":
+                    if isinstance(asset_data, Path) and task["kind"] in ("文档", '图片', '音频'):
                         atomic_copy(asset_data, asset, metadata["byteCount"], metadata["fingerprint"])
                     elif asset_data is None or len(asset_data) != metadata["byteCount"] or sha(asset_data) != metadata["fingerprint"]:
                         raise CoreError("缺少匹配的封存源副本。", "source_mismatch")
@@ -253,6 +263,8 @@ class TaskStore:
                 self.write(existing, directory / "previous.json")
             self.write(encoded, current)
             self.high_water[identity] = task["revision"]
+            self.expected_snapshots[identity] = sha(encoded)
+            self.history_epoch += 1
             return True
 
     def import_copy(self, source):
@@ -279,7 +291,23 @@ class TaskStore:
                     if isinstance(asset_data, Path):
                         atomic_copy(asset_data, temp / self.asset_name(task), task["asset"]["byteCount"], task["asset"]["fingerprint"])
                     else: atomic_write(asset_data, temp / self.asset_name(task))
+                if task['kind'] == '音频' and task['audio']['pcm']:
+                    pcm = task['audio']['pcm']; media = source / pcm['filename']
+                    from .resources import no_links
+                    no_links(media)
+                    if file_identity(media, 57_600_044) != (pcm['byteCount'], pcm['fingerprint']):
+                        raise CoreError('导入任务的规范音频不匹配。', 'source_mismatch')
+                    atomic_copy(media, temp / pcm['filename'], pcm['byteCount'], pcm['fingerprint'])
+                capture = (task.get('audio') or {}).get('recording')
+                if capture:
+                    (temp / 'capture').mkdir()
+                    from .resources import no_links
+                    for chunk in capture['chunks']:
+                        original = source / chunk['file']
+                        no_links(original)
+                        atomic_copy(original, temp / chunk['file'], chunk['bytes'], chunk['sha256'])
                 os.rename(temp, target)
+                self.history_epoch += 1
             finally:
                 if temp.exists(): shutil.rmtree(temp)
         return task, warning

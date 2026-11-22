@@ -6,6 +6,7 @@ from pathlib import Path
 from . import CoreError, Cancelled
 from .pdf_adapter import PDFAdapter
 from .store import is_link
+from .languages import vision_languages
 
 MAX_OCR_FACT_BYTES = 4 * 1024 * 1024
 
@@ -20,9 +21,11 @@ class OCRAdapter(PDFAdapter):
         self.languages = languages
 
     def profile(self, direction):
-        if direction not in ('en-zh', 'zh-en'): raise CoreError('OCR方向无效。')
-        required = (['zh-Hans-CN'] if direction == 'zh-en' else ['en-US']) if sys.platform == 'win32' else (
-            ['zh-Hans','en-US'] if direction == 'zh-en' else ['en-US','zh-Hans'])
+        if sys.platform == 'win32':
+            if direction not in ('en-zh', 'zh-en'): raise CoreError('OCR方向无效。')
+            required = ['zh-Hans-CN'] if direction == 'zh-en' else ['en-US']
+        else:
+            required = vision_languages(direction)
         return dict(identity=self.identity, native=self.probe['profile'], languages=required,
                     pdfBackend=self.pdf.identity, maxEdge=3000, maxPixels=9_000_000, maxScale=3)
 
@@ -34,6 +37,8 @@ class OCRAdapter(PDFAdapter):
     def recognize(self, source, fingerprint, page, direction, cancel):
         self.require(direction)
         fields = dict(direction=direction)
+        if sys.platform == 'darwin':
+            fields['recognitionLanguages'] = self.profile(direction)['languages']
         image = None
         try:
             if sys.platform == 'win32':

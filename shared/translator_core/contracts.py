@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from . import CoreError
+from .languages import LEGACY_DIRECTIONS, valid_direction
 
 SOURCE_BYTES = 2048
 MAX_INPUT_BYTES = 1024 * 1024
@@ -96,13 +97,18 @@ def validate_recipe(recipe):
         raise CoreError("翻译配置字段无效。")
     options = recipe.get("options", {})
     version = recipe.get("version")
-    if not (type(version) is int and (version == 1 and "contextVersion" not in recipe or
-            version == 2 and recipe.get("contextVersion") == "none-v1" and
-            recipe.get("promptProfile") == "hy-mt2-faithful-v2")):
+    profile = recipe.get('promptProfile')
+    latest = version == 3 and recipe.get('contextVersion') == 'none-v1' and profile in (
+        'hy-mt2-multilingual-v1', 'ollama-chat-translation-v1')
+    if not (type(version) is int and (latest or version == 1 and "contextVersion" not in recipe or
+            version == 2 and recipe.get("contextVersion") == "none-v1" and profile == "hy-mt2-faithful-v2")):
         raise CoreError("配置版本不兼容；可阅读/导出，请另建任务。", "recipe_incompatible")
+    direction = recipe.get('direction')
+    context, prediction = options.get('num_ctx'), options.get('num_predict')
+    capacity = (type(context) is int and type(prediction) is int and 2048 <= context <= 8192
+                and prediction == min(4096, context//2)) if latest else (context, prediction) == (8192, 4096)
     if (recipe.get("splitterVersion") not in ("natural-language-utf8-v1", "qt6102-unicode-utf8-v1") or
-            recipe.get("direction") not in ("en-zh", "zh-en") or
-            options.get("num_ctx") != 8192 or options.get("num_predict") != 4096 or
+            not valid_direction(direction) or not latest and direction not in LEGACY_DIRECTIONS or not capacity or
             not all(type(v) in (int, float) and math.isfinite(v) for v in options.values())):
         raise CoreError("翻译配置或容量不兼容。", "recipe_incompatible")
     if (not isinstance(recipe.get("model"), str) or not isinstance(recipe.get("userPrefix"), str) or
@@ -113,6 +119,10 @@ def validate_recipe(recipe):
     digest = recipe.get("modelDigest")
     if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
         raise CoreError("缺少可核对的模型digest；可阅读/导出，请另建任务。", "model_identity_missing")
+    served = recipe.get('servedDigest')
+    if (latest or served is not None) and (not isinstance(served, str) or len(served) != 64
+                                           or any(c not in '0123456789abcdef' for c in served)):
+        raise CoreError('缺少本次 Ollama 模型摘要。', 'model_identity_missing')
 
 
 def validate_task(task):
@@ -125,15 +135,25 @@ def validate_task(task):
     if (not isinstance(task.get("name"), str) or not isinstance(task.get("drafts"), dict) or
             any(type(task.get(k)) not in (int, float) or not math.isfinite(task[k]) for k in ("created", "updated"))):
         raise CoreError("任务名称、日期或草稿字段无效。")
-    if (not isinstance(recipe.get("model"), str) or recipe.get("direction") not in ("en-zh", "zh-en") or
+    if (not isinstance(recipe.get("model"), str) or not valid_direction(recipe.get("direction")) or
             not isinstance(recipe.get("options"), dict) or not isinstance(recipe.get("userPrefix"), str)):
         raise CoreError("保存配置缺少必需字段。")
+    if task.get("kind") == "音频":
+        from .audio import validate_audio_task
+        validate_audio_task(task)
+        return
     if task.get("kind") == "文档":
+        if task.get('formatVersion') not in (None,1,2): raise CoreError('文档版本不兼容。','future_schema')
         from .documents import validate_document_task
         validate_document_task(task)
         return
+    if task.get('kind') == '图片':
+        from .images import validate_image_task
+        validate_image_task(task)
+        return
     if task.get("kind") != "文字" or task.get("document") is not None:
         raise CoreError("任务类型与内容不匹配。", "task_kind_mismatch")
+    if task.get('formatVersion') not in (None,1): raise CoreError('文字版本不兼容。','future_schema')
     if text is None:
         return
     if (not isinstance(text, dict) or text.get("source") != source or text.get("model") != recipe.get("model") or
@@ -177,7 +197,7 @@ def decode_snapshot(raw):
         raise CoreError("保存文件过大。")
     envelope = strict_json(raw)
     if not isinstance(envelope, dict): raise CoreError("保存文件不是对象。")
-    if type(envelope.get("schema")) is not int or envelope["schema"] not in (1,2):
+    if type(envelope.get("schema")) is not int or envelope["schema"] not in (1,2,3,4,5):
         raise CoreError("不支持此保存版本；原文件保留。", "future_schema")
     try:
         payload = base64.b64decode(envelope["payload"], validate=True)
@@ -186,7 +206,7 @@ def decode_snapshot(raw):
     if len(payload) > MAX_SNAPSHOT_BYTES or sha(payload) != envelope.get("checksum"):
         raise CoreError("任务checksum不匹配。", "snapshot_corrupt")
     task = strict_json(payload)
-    if (envelope['schema']==2 and task.get('formatVersion')!=2 or
+    if (envelope['schema'] in (2,3,4,5) and task.get('formatVersion')!=envelope['schema'] or
             envelope['schema']==1 and task.get('formatVersion') not in (None,1)):
         raise CoreError("保存版本与有效字段不匹配。", "future_schema")
     validate_task(task)
@@ -199,7 +219,7 @@ def encode_snapshot(task):
     if len(payload) > MAX_SNAPSHOT_BYTES:
         raise CoreError("任务快照超出预览容量。")
     schema=task.get('formatVersion',1)
-    if schema not in (1,2): raise CoreError("不支持此保存版本。", "future_schema")
+    if schema not in (1,2,3,4,5): raise CoreError("不支持此保存版本。", "future_schema")
     return foundation_json({"schema": schema, "checksum": sha(payload), "payload": base64.b64encode(payload).decode()})
 
 
@@ -213,17 +233,39 @@ def recover_in_memory(task):
         for part in text["segments"]:
             if part["state"] == "processing":
                 part["state"] = "stopped"
-    document = task.get("document")
+    audio = task.get("audio")
+    if audio:
+        if audio["phase"] in ("decoding", "recognizing", "refining"):
+            audio["phase"] = "stopped"
+        for cue in audio["cues"]:
+            if cue["state"] == "processing": cue["state"] = "stopped"
+        capture = audio.get('recording')
+        if capture and capture['state'] not in ('sealed', 'failed', 'interrupted', 'save_blocked'):
+            capture['state'] = 'interrupted'
+            capture['reason'] = 'worker_ended_reopen_requires_explicit_recovery'
+            audio['phase'] = 'interrupted'
+    document = task.get("document") or task.get('image')
     if document:
-        for page in document["pages"]:
+        from .images import units
+        for page in units(document):
             if page["state"] in ("pending", "recognizing"):
                 page["state"] = "stopped"
-        if any(p["state"] == "stopped" for p in document["pages"]):
+        if any(p["state"] == "stopped" for p in units(document)):
             document["phase"] = "提取中断，等待主动继续"
     return task
 
 
 def bilingual_text(task):
+    if task.get("kind") == "音频":
+        from .audio import subtitle_text
+        return subtitle_text(task)
+    if task.get('kind') == '图片':
+        from .images import image_text
+        return image_text(task)
+    if task.get("kind") == "音频":
+        from .audio import validate_audio_task
+        validate_audio_task(task)
+        return
     if task.get("kind") == "文档":
         from .documents import document_text
         return document_text(task)

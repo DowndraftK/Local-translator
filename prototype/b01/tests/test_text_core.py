@@ -301,7 +301,7 @@ class StoreCase(unittest.TestCase):
 
 class LocalAPI:
     def __init__(self):
-        self.calls = []; self.mode = "normal"; self.entered = threading.Event(); self.release = threading.Event()
+        self.calls = []; self.mode = "normal"; self.version = "0.35.0"; self.entered = threading.Event(); self.release = threading.Event()
         fixture = self
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.0"
@@ -313,7 +313,7 @@ class LocalAPI:
                 body = json.loads(self.rfile.read(count)) if count else None
                 fixture.calls.append((self.path, body))
                 recipe = default_recipe("en-zh")
-                if self.path == "/api/version": value = {"version": "0.35.0"}
+                if self.path == "/api/version": value = {"version": fixture.version}
                 elif self.path == "/api/tags":
                     model = {"name": recipe["model"], "digest": "0" * 64 if fixture.mode == "digest" else recipe["modelDigest"]}
                     if fixture.mode == "cloud": model["remote_host"] = "cloud.example"
@@ -358,6 +358,22 @@ class OllamaCase(unittest.TestCase):
             self.api.mode = mode
             with self.assertRaises(CoreError) as failure: Ollama(self.api.address).translate("source", self.recipe)
             self.assertFalse(failure.exception.stops_scheduling)
+    def test_updated_server_keeps_fixed_recipe_and_checks_actual_model_capabilities(self):
+        for version in ('0.35.0','0.40.6','1.0.0'):
+            self.api.version = version; self.api.calls.clear()
+            result = Ollama(self.api.address).translate('12 local notes.',self.recipe)
+            self.assertEqual(result['configurationBinding'],recipe_binding(self.recipe))
+            self.assertEqual(self.api.calls[-1][1]['options'],self.recipe['options'])
+            self.assertEqual(Ollama(self.api.address).verify(self.recipe)['version'],version)
+        self.api.mode = 'digest'
+        self.api.calls.clear()
+        with self.assertRaises(CoreError): Ollama(self.api.address).translate('source',self.recipe)
+        self.assertNotIn('/api/chat',[p for p,_ in self.api.calls])
+    def test_invalid_service_metadata_does_not_trigger_generation(self):
+        for version in (None,17,'',' '*3,'x'*97):
+            self.api.version = version; self.api.calls.clear()
+            with self.assertRaises(CoreError): Ollama(self.api.address).translate('source',self.recipe)
+            self.assertEqual([p for p,_ in self.api.calls],['/api/version'])
     def test_wrong_digest_and_cloud_resources_rejected_before_chat(self):
         for mode in ("digest", "cloud"):
             self.api.mode = mode; self.api.calls.clear()

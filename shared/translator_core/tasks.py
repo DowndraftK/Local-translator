@@ -9,13 +9,16 @@ from .contracts import (MAX_INPUT_BYTES, bilingual_text, default_recipe, foundat
                         recover_in_memory, recipe_binding, sha, trim, validate_recipe, validate_task)
 from .ollama import Ollama
 from .planning import split
+from .text_policy import assess_concise_text
 
 FOUNDATION_EPOCH = 978307200
 
 
 class TextTasks:
-    def __init__(self, store, boundaries, engine_factory=Ollama):
+    def __init__(self, store, boundaries, engine_factory=Ollama, preferences=None, resolve_task_values=None):
         self.store, self.boundaries, self.engine_factory = store, boundaries, engine_factory
+        self.preferences = preferences
+        self.resolve_task_values = resolve_task_values
         self.lock = threading.RLock()
         self.task = None
         self.warning = None
@@ -23,6 +26,9 @@ class TextTasks:
         self.save_blocked = False
         self.active = None
         self.engine = None
+        # Diagnostic only: the most recent NEW text operation, never persisted
+        # or used to reinterpret an opened/resumed task.
+        self.last_text_creation = None
 
     def snapshot(self):
         with self.lock:
@@ -33,12 +39,30 @@ class TextTasks:
     def idle(self):
         if self.active is not None: raise CoreError("请先安全取消当前操作，再切换任务。", "busy")
 
+    def new_recipe(self, direction):
+        if self.preferences is None:
+            return default_recipe(direction)
+        from .preferences import recipe_for
+        return recipe_for(self.task_values(), direction)
+
+    def task_values(self):
+        values = self.preferences.require_confirmed()
+        return self.resolve_task_values(values) if self.resolve_task_values else values
+
+    def apply_new_execution(self, task):
+        if self.preferences is not None:
+            from .preferences import execution_for
+            task['execution'] = execution_for(self.task_values(), self.preferences.revision)
+
     def create(self, source, direction, name=None):
         with self.lock:
             self.idle()
             if not isinstance(source, str) or not trim(source) or len(source.encode()) > MAX_INPUT_BYTES:
                 raise CoreError("请输入非空原文，预览上限1MiB UTF-8。")
-            recipe = default_recipe(direction)
+            assessment = assess_concise_text(source, direction)
+            if assessment.analysis.is_empty:
+                raise CoreError("请输入非空原文。", "empty_source")
+            recipe = self.new_recipe(direction)
             recipe["splitterVersion"] = getattr(self.boundaries, "splitter_version", recipe["splitterVersion"])
             identity = str(uuid.uuid4()).upper(); now = time.time() - FOUNDATION_EPOCH
             raw = source.encode(); fingerprint = sha(raw)
@@ -46,8 +70,10 @@ class TextTasks:
                         kind="文字", input=source, configuration=recipe, drafts={},
                         asset=dict(originalPath="b02://typed-input", filename=f"source-{fingerprint}.txt",
                                    byteCount=len(raw), fingerprint=fingerprint))
+            self.apply_new_execution(task)
             self.store.save(task, raw)
             self.task, self.warning, self.durable_revision, self.save_blocked = task, None, 1, False
+            self.last_text_creation = dict(task_id=identity, assessment=assessment)
             return self.snapshot()
 
     def open(self, identity):
@@ -116,9 +142,12 @@ class TextTasks:
             self.idle()
             if self.task is None: raise CoreError("请先保存新任务或打开已有任务。")
             if self.save_blocked: raise CoreError("保存/源副本受阻，禁止继续；可完整导出后另建任务。", "save_blocked")
+            # History metadata is authoritative even for direct shared-core callers.
+            if self.store.history.metadata(self.task['id'],self.task['kind'])['trashed_at'] is not None:
+                raise CoreError('此记录在回收站，请先恢复后再继续。','task_trashed')
             validate_recipe(self.task["configuration"])
             if (not (self.task.get("text") or {}).get("segments") and
-                    not (self.task.get("document") or {}).get("segments") and
+                    not (self.task.get("document") or self.task.get('image') or {}).get("segments") and
                     self.task["configuration"]["splitterVersion"] != getattr(
                         self.boundaries, "splitter_version", "natural-language-utf8-v1")):
                 raise CoreError("未分段任务需要原分句适配器；请在原平台继续或另建任务。", "boundary_adapter_mismatch")

@@ -1,6 +1,6 @@
 """Shared text contracts, persistence and scheduling. No UI or GPU imports."""
 
-CORE_VERSION = "b04-ocr.1"
+CORE_VERSION = "t09b-runtime.1"
 
 
 class CoreError(ValueError):

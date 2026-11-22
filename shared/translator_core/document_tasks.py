@@ -8,6 +8,7 @@ from .contracts import MAX_INPUT_BYTES, default_recipe, trim, validate_task
 from .documents import page_range, source_key, prepare_document, coverage
 from .store import MAX_DOCUMENT_BYTES, atomic_copy, file_identity, safe_file, is_link
 from .tasks import TextTasks, FOUNDATION_EPOCH
+from .images import content, units, unit_field
 
 
 class DocumentTasks(TextTasks):
@@ -70,7 +71,7 @@ class DocumentTasks(TextTasks):
             if not s["isPDF"] and r != {"first": 1, "last": 1}: raise CoreError("TXT只能选择全文。")
             count, fingerprint = file_identity(s["path"])
             if (count, fingerprint) != (s["byteCount"], s["fingerprint"]): raise CoreError("暂存来源字节已变化。", "source_mismatch")
-            recipe = default_recipe(direction); recipe["splitterVersion"] = self.boundaries.splitter_version
+            recipe = self.new_recipe(direction); recipe["splitterVersion"] = self.boundaries.splitter_version
             identity = str(uuid.uuid4()).upper(); now = time.time() - FOUNDATION_EPOCH
             doc = dict(id=identity, file=s["file"], fingerprint=fingerprint, originalPath=s["originalPath"],
                        extractionProfile=s["backend"], totalPages=s["totalPages"], isPDF=s["isPDF"], range=r,
@@ -84,27 +85,28 @@ class DocumentTasks(TextTasks):
                 task['formatVersion']=2;doc['mode']='ocr';doc['extractionProfile']=self.ocr_adapter.identity
                 doc['ocrBackend']=self.ocr_adapter.profile(direction);doc['phase']='显式OCR任务已保存，等待主动识别'
                 for p in doc['pages']:p.update(mode='ocr',effectiveSource=dict(kind='unobtained',rawRevision=None),reviewRevision=None)
+            self.apply_new_execution(task)
             self.store.save(task, Path(s["path"]))
             self.task, self.warning, self.durable_revision, self.save_blocked = task, None, 1, False
             return self.snapshot()
 
     def _document(self):
-        if not self.task or self.task["kind"] != "文档": raise CoreError("请先打开文档任务。", "task_kind_mismatch")
-        return self.task["document"]
+        if not self.task or self.task["kind"] not in ("文档", "图片"): raise CoreError("请先打开文档任务。", "task_kind_mismatch")
+        return content(self.task)
 
     def _source_key(self):
-        return source_key(self.task["document"]) if self.task["kind"] == "文档" else super()._source_key()
+        return source_key(content(self.task)) if self.task["kind"] in ("文档", "图片") else super()._source_key()
 
     def _before_run(self):
-        if self.task["kind"] != "文档": return
+        if self.task["kind"] not in ("文档", "图片"): return
         d = self._document()
         if self.task["drafts"]: raise CoreError("尚有未应用草稿，请先保存校正或显式放弃草稿。", "unapplied_draft")
-        if any(p["state"] in ("pending", "recognizing", "stopped") for p in d["pages"]):
+        if any(p["state"] in ("pending", "recognizing", "stopped") for p in units(d)):
             raise CoreError("尚有未处理页，请主动继续提取后再翻译。", "extraction_incomplete")
-        if not any(trim(p["text"]) for p in d["pages"]): raise CoreError("所选范围没有可翻译文字。", "zero_translatable_text")
+        if not any(trim(p["text"]) for p in units(d)): raise CoreError("所选范围没有可翻译文字。", "zero_translatable_text")
 
     def _plan(self, cancel):
-        if self.task["kind"] != "文档": return super()._plan(cancel)
+        if self.task["kind"] not in ("文档", "图片"): return super()._plan(cancel)
         with self.lock:
             d = self._document()
             plan = prepare_document(d, self.boundaries, cancel)
@@ -112,23 +114,26 @@ class DocumentTasks(TextTasks):
             self.task["text"]["segments"] = deepcopy(plan)
             return deepcopy(plan)
 
+    def _ocr_for_current(self):
+        return self.ocr_adapter
+
     def extract(self, generation, cancel, changed, mode='text'):
         with self.lock:
-            self.idle(); d = self._document()
+            self.idle(); d = self._document(); ocr = self._ocr_for_current()
             if self.save_blocked: raise CoreError("保存/源副本受阻；仍可阅读和导出。", "save_blocked")
             source = self.store.verify_asset(self.task, self.store.directory(self.task["id"]))
-            missing = [p for p in d["pages"] if p["state"] in ("pending", "recognizing", "stopped", "failed") and not p["edited"]]
+            missing = [p for p in units(d) if p["state"] in ("pending", "recognizing", "stopped", "failed") and not p["edited"]]
             if mode=='ocr':missing=[p for p in missing if p.get('ocr') is None]
             if not missing: return "completed"
             if d["translationStarted"] or d["segments"] or self.task.get("text"):
                 raise CoreError("已有来源计划已冻结；补页或更改原文须显式另建任务。", "source_frozen")
-            if d["isPDF"] and self.adapter is None: raise CoreError("本地PDF适配器不可用；可读已获得内容/导出。", "pdf_adapter_missing")
+            if d.get("isPDF", False) and self.adapter is None: raise CoreError("本地PDF适配器不可用；可读已获得内容/导出。", "pdf_adapter_missing")
             if mode=='ocr':
-                if self.task.get('formatVersion')!=2 or self.ocr_adapter is None:raise CoreError('旧OCR后端不兼容；请显式另建任务。','ocr_adapter_mismatch')
+                if self.task.get('formatVersion') not in (2,3) or ocr is None:raise CoreError('旧OCR后端不兼容；请显式另建任务。','ocr_adapter_mismatch')
                 if self.task['drafts']:raise CoreError('请先应用或明确放弃编辑草稿。','unapplied_draft')
-                if d['ocrBackend']!=self.ocr_adapter.profile(d['direction']):raise CoreError('OCR资源/规则身份已改变，请另建任务。','ocr_adapter_mismatch')
-                self.ocr_adapter.require(d['direction'])
-            expected = self.ocr_adapter.identity if mode=='ocr' else self.adapter.identity if d["isPDF"] else "utf8-bom-v1"
+                if d['ocrBackend']!=ocr.profile(d['direction']):raise CoreError('OCR资源/规则身份已改变，请另建任务。','ocr_adapter_mismatch')
+                ocr.require(d['direction'])
+            expected = ocr.identity if mode=='ocr' else self.adapter.identity if d.get("isPDF", False) else "utf8-bom-v1"
             if d.get("extractionProfile") != expected or d["mode"] != mode:
                 raise CoreError("提取后端身份不兼容；可阅读核对/导出已有内容或另建任务。", "extraction_adapter_mismatch")
             self.active = (generation, cancel); d["phase"] = "正在逐页整页OCR；可取消当前自有事实进程" if mode=='ocr' else "正在逐页提取文字层"
@@ -138,12 +143,12 @@ class DocumentTasks(TextTasks):
                     self._current(generation)
                     p["state"] = "recognizing"; p.pop("issue", None); self._persist(changed)
                 try:
-                    result = self.ocr_adapter.recognize(source,d['fingerprint'],p['id'],d['direction'],cancel) if mode=='ocr' else self.adapter.page(source, d["fingerprint"], p["id"], cancel) if d["isPDF"] else dict(text=self._txt(source), page=1)
+                    result = ocr.recognize(source,d['fingerprint'],p['id'],d['direction'],cancel) if mode=='ocr' else self.adapter.page(source, d["fingerprint"], p["id"], cancel) if d.get("isPDF", False) else dict(text=self._txt(source), page=1)
                     with self.lock:
                         self._current(generation)
-                        if result.get("page") != p["id"] or not isinstance(result.get("text"), str):
+                        if result.get(unit_field(d)) != p["id"] or not isinstance(result.get("text"), str):
                             raise CoreError("提取响应页身份不匹配。", "page_identity_mismatch")
-                        if sum(len(q["text"].encode()) for q in d["pages"] if q is not p) + len(result["text"].encode()) > MAX_INPUT_BYTES:
+                        if sum(len(q["text"].encode()) for q in units(d) if q is not p) + len(result["text"].encode()) > MAX_INPUT_BYTES:
                             raise CoreError("累计原文超出1MiB UTF-8保护，当前页未接收；请另建较小范围任务。", "resource_limit")
                         candidate = deepcopy(p)
                         candidate["text"] = result["text"]; candidate["state"] = "extracted" if trim(result["text"]) else "noText"
@@ -156,7 +161,7 @@ class DocumentTasks(TextTasks):
                         # Validate the whole bounded raw/effective manifest before accepting
                         # a page. Invalid or oversized raw facts never poison in-memory state.
                         proposed = deepcopy(self.task)
-                        proposed['document']['pages'][d['pages'].index(p)] = candidate
+                        units(content(proposed))[units(d).index(p)] = candidate
                         validate_task(proposed)
                         self._current(generation)
                         p.clear(); p.update(candidate)
@@ -168,14 +173,14 @@ class DocumentTasks(TextTasks):
                     if exc.code in ("resource_limit", "source_mismatch", "unsafe_path", "save_failed"): raise
             with self.lock:
                 self._current(generation)
-                complete = all(p["state"] in ("extracted", "noText") for p in d["pages"])
+                complete = all(p["state"] in ("extracted", "noText") for p in units(d))
                 d["phase"] = ("所选范围OCR响应完成，等待人工核对" if mode=='ocr' else "所选范围提取完成") if complete else "所选范围存在问题页"
                 d.pop('issue',None)
-                if not any(trim(p["text"]) for p in d["pages"]): d["issue"] = "所选范围没有可翻译文字；请核对原页。"
+                if not any(trim(p["text"]) for p in units(d)): d["issue"] = "所选范围没有可翻译文字；请核对原页。"
                 self._persist(changed); return "completed" if complete else "partial"
         except (Cancelled, CoreError) as exc:
             with self.lock:
-                for p in d["pages"]:
+                for p in units(d):
                     if p["state"] in ("pending", "recognizing"): p["state"] = "stopped"
                 d["phase"] = "已停止页面处理，等待主动继续" if isinstance(exc, Cancelled) else "页面处理未完成"
                 if not isinstance(exc, Cancelled): d["issue"] = str(exc)
@@ -197,10 +202,10 @@ class DocumentTasks(TextTasks):
     def _editable_page(self,number,revision,frozen=True):
         self.idle();d=self._document()
         if self.save_blocked:raise CoreError('保存受阻，保留原任务，可阅读/导出。','save_blocked')
-        if self.task.get('formatVersion')!=2:raise CoreError('旧schema1只读核对；编辑请明确另建核对任务。','ocr_schema_mismatch')
+        if self.task.get('formatVersion') not in (2,3):raise CoreError('旧schema1只读核对；编辑请明确另建核对任务。','ocr_schema_mismatch')
         if frozen and (d['translationStarted'] or d['segments'] or self.task.get('text')):
             raise CoreError('来源已冻结；请另建核对任务，保留旧译文。','source_frozen')
-        p=next((p for p in d['pages'] if p['id']==number),None)
+        p=next((p for p in units(d) if p['id']==number),None)
         if p is None or p['revision']!=revision:raise CoreError('请求不属于当前有效页修订。','page_revision_mismatch')
         return p
 
@@ -218,7 +223,7 @@ class DocumentTasks(TextTasks):
             p=self._editable_page(number,revision);key=str(number);draft=self.task['drafts'].get(key)
             if draft is None or draft['baseRevision']!=revision:raise CoreError('没有属于当前修订的草稿。','draft_revision_mismatch')
             if not discard:
-                if sum(len(q['text'].encode()) for q in self._document()['pages'] if q is not p)+len(draft['text'].encode())>MAX_INPUT_BYTES:
+                if sum(len(q['text'].encode()) for q in units(self._document()) if q is not p)+len(draft['text'].encode())>MAX_INPUT_BYTES:
                     raise CoreError('有效原文累计超出1MiB保护。','resource_limit')
                 old=p['revision'];p['text']=draft['text'];p['revision']=str(uuid.uuid4()).upper();p['edited']=True
                 p['state']='extracted' if trim(p['text']) else 'noText';p['reviewed']=False;p['reviewRevision']=None
@@ -240,15 +245,16 @@ class DocumentTasks(TextTasks):
         with self.lock:
             self.idle();old=self.task;d=self._document();source=self.store.verify_asset(old,self.store.directory(old['id']))
             if self.save_blocked:raise CoreError('此任务只读或保存受阻；请显式从完整来源另建任务。','save_blocked')
-            if old['drafts']:raise CoreError('先应用或明确放弃草稿，再另建任务。','unapplied_draft')
+            legacy_drafts = old.get('formatVersion') != 2 and bool(old['drafts'])
+            if old['drafts'] and (not legacy_drafts or fresh):raise CoreError('先应用或明确放弃草稿，再另建任务。','unapplied_draft')
             if type(fresh) is not bool:raise CoreError('新任务目的无效。')
             if self.ocr_adapter is None:raise CoreError('当前OCR适配器不可用。','ocr_adapter_missing')
             direction=direction or d['direction'];identity=str(uuid.uuid4()).upper();now=time.time()-FOUNDATION_EPOCH
-            recipe=default_recipe(direction);recipe['splitterVersion']=self.boundaries.splitter_version
+            recipe=self.new_recipe(direction);recipe['splitterVersion']=self.boundaries.splitter_version
             new=deepcopy(old);new.pop('text',None);new['formatVersion']=2;new['id']=identity;new['revision']=1
             new.update(created=now,updated=now,configuration=recipe,drafts={},parent=dict(id=old['id'],revision=old['revision'],purpose='fresh-ocr' if fresh else 'review-copy'))
             nd=new['document'];nd.update(id=identity,mode='ocr',model=recipe['model'],direction=direction,segments=[],sources=[],translationStarted=False,extractionProfile=self.ocr_adapter.identity,ocrBackend=self.ocr_adapter.profile(direction),phase='明确另建的OCR/核对任务，旧任务与译文保留')
-            for p in nd['pages']:
+            for p in units(nd):
                 if fresh:
                     p.pop('ocr',None);p.pop('issue',None);p.update(text='',state='pending',edited=False,reviewed=False,revision=str(uuid.uuid4()).upper())
                     p['effectiveSource']=dict(kind='unobtained',rawRevision=None)
@@ -267,5 +273,13 @@ class DocumentTasks(TextTasks):
                         if trim(p['text']):p['edited']=True
                     p['reviewed']=False
                 p['mode']='ocr';p['reviewRevision']=None
+            # Legacy schema1 remains byte-for-byte read-only. An explicit review
+            # copy can preserve its otherwise uneditable drafts with schema2
+            # ownership; they must still be applied/discarded before translation.
+            if legacy_drafts:
+                new['drafts']={number:dict(id=str(uuid.uuid4()).upper(),
+                    baseRevision=next(p['revision'] for p in nunits(d) if p['id']==int(number)),text=body)
+                    for number,body in old['drafts'].items()}
+            self.apply_new_execution(new)
             self.store.save(new,source);self.task=new;self.save_blocked=False;self.warning=None;self.durable_revision=1
             return self.snapshot()

@@ -4,6 +4,7 @@ import uuid
 from copy import deepcopy
 from . import CoreError
 from .contracts import MAX_INPUT_BYTES, task_id, trim
+from .images import content, validate_geometry, OCR_CONTRACT
 
 MAX_OBSERVATIONS_PAGE = 4096
 MAX_OBSERVATIONS_TASK = 16384
@@ -29,7 +30,17 @@ def validate_raw(raw):
             max(w, h) > 3000 or w * h > 9_000_000):
         raise CoreError("原始渲染像素超限。", "resource_limit")
     crop = raw.get("cropBox")
-    if (raw.get("rotation") not in (0, 90, 180, 270) or not isinstance(crop, list) or
+    image = raw.get('contract') == OCR_CONTRACT
+    if image:
+        validate_geometry(raw.get('sourceGeometry'))
+        g=raw['sourceGeometry']; scaling=raw.get('displayToRaster')
+        if (any(k in raw for k in ('cropBox','rotation','label','page')) or
+                not isinstance(scaling, list) or len(scaling)!=2 or
+                not all(finite(v) and 0<v<=1 for v in scaling) or
+                abs(scaling[0]-w/g['displayWidth'])>1e-9 or abs(scaling[1]-h/g['displayHeight'])>1e-9 or
+                raw.get('coordinateSystem') not in COORDINATES or raw.get('orientation')!='up'):
+            raise CoreError('图片方向/栅格/坐标转换无效。','image_geometry')
+    elif (raw.get("rotation") not in (0, 90, 180, 270) or not isinstance(crop, list) or
             len(crop) != 4 or not all(finite(v) for v in crop) or min(crop[2:]) <= 0 or
             not (raw.get('evidenceOrigin')=='schema1-preserved' and raw.get('scale') is None or
                  finite(raw.get("scale")) and 0 < raw["scale"] <= 3) or
@@ -57,9 +68,9 @@ def validate_raw(raw):
     return len(raw["rawText"].encode()), observation_bytes, len(observations)
 
 
-def validate_ocr(task, pages):
-    d = task["document"]
-    if (d["mode"] != "ocr" or not d["isPDF"] or not isinstance(d.get("ocrBackend"), dict) or
+def validate_ocr(task, pages, image=False):
+    d = content(task)
+    if (d["mode"] != "ocr" or (task.get('formatVersion')!=3 if image else not d["isPDF"]) or not isinstance(d.get("ocrBackend"), dict) or
             any(p["mode"] != "ocr" for p in pages.values())):
         raise CoreError("schema2仅用于显式PDF OCR任务。")
     raw_bytes = observation_bytes = observation_count = 0
@@ -78,6 +89,12 @@ def validate_ocr(task, pages):
                 raise CoreError("没有原始OCR却带识别来源。", "source_revision_mismatch")
             continue
         a, b, c = validate_raw(raw); raw_bytes += a; observation_bytes += b; observation_count += c
+        if image:
+            if (raw.get('contract')!=OCR_CONTRACT or raw.get('sourceFingerprint')!=d['source']['fingerprint'] or
+                    raw.get('sourceID')!=d['source']['id'] or raw.get('sourceGeometry')!=d['source']['geometry']):
+                raise CoreError('原始OCR不属于当前图片来源。','image_source_mismatch')
+        elif raw.get('contract') is not None:
+            raise CoreError('PDF OCR不能携带独立图片事实。','image_contract_mismatch')
         if source.get("rawRevision") != raw["rawRevision"]:
             raise CoreError("有效原文不属于此原始OCR。", "source_revision_mismatch")
         if source["kind"] in ("ocr", "ocr-empty") and p["text"] != raw["rawText"]:

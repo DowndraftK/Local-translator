@@ -6,6 +6,7 @@ import math
 from . import CoreError
 from .contracts import MAX_INPUT_BYTES, STATES, LABELS, recipe_binding, task_id, trim
 from .planning import split
+from .images import units, unit_field
 
 PAGE_STATES = {"pending", "recognizing", "extracted", "noText", "failed", "stopped"}
 PAGE_LABELS = {"pending": "待提取", "recognizing": "当前页处理中", "extracted": "有文字", "noText": "无文字",
@@ -20,7 +21,7 @@ def page_range(first, last, total):
 
 
 def source_key(document):
-    return document["id"] + "".join(page["revision"] for page in document["pages"])
+    return document["id"] + "".join(page["revision"] for page in units(document))
 
 
 def validate_document_task(task):
@@ -40,6 +41,17 @@ def validate_document_task(task):
     pages = d.get("pages")
     if not isinstance(pages, list) or [p.get("id") for p in pages if isinstance(p, dict)] != list(range(r["first"], r["last"] + 1)):
         raise CoreError("每个所选物理页都必须保留在清单中。")
+    validate_content(task, d, pages)
+    if task.get('formatVersion')==2:
+        from .ocr_contracts import validate_ocr
+        validate_ocr(task,{p['id']:p for p in pages})
+    elif any(not str(n).isdigit() or int(n) not in {p['id'] for p in pages} or not isinstance(body, str) for n, body in task["drafts"].items()):
+        raise CoreError("草稿来源页不匹配。", "draft_revision_mismatch")
+
+
+def validate_content(task, d, pages):
+    """Shared raw/effective/plan validation, without inventing PDF geometry."""
+    recipe, text = task['configuration'], task.get('text')
     by_id = {}
     for p in pages:
         if (p.get("state") not in PAGE_STATES or p.get("mode") not in ("text", "ocr") or
@@ -50,18 +62,13 @@ def validate_document_task(task):
         by_id[p["id"]] = p
     if sum(len(p["text"].encode()) for p in pages) > MAX_INPUT_BYTES:
         raise CoreError("所选页累计文字超出1MiB UTF-8保护。", "resource_limit")
-    if task.get('formatVersion')==2:
-        from .ocr_contracts import validate_ocr
-        validate_ocr(task,by_id)
-    elif any(not str(n).isdigit() or int(n) not in by_id or not isinstance(body, str) for n, body in task["drafts"].items()):
-        raise CoreError("草稿来源页不匹配。", "draft_revision_mismatch")
     plan, sources = d.get("segments"), d.get("sources")
     if not isinstance(plan, list) or not isinstance(sources, list) or len(plan) != len(sources) or len(plan) > 4096:
         raise CoreError("文档计划或来源映射无效。", "resource_limit")
     cursor = {p["id"]: 0 for p in pages}
     for i, (part, m) in enumerate(zip(plan, sources)):
         if not isinstance(part, dict) or not isinstance(m, dict): raise CoreError("文档段字段无效。")
-        p = by_id.get(m.get("page"))
+        p = by_id.get(m.get(unit_field(d)))
         if (p is None or m.get("segmentID") != i or m.get("revision") != p["revision"] or
                 type(m.get("paragraph")) is not int or m["paragraph"] < 1 or part.get("id") != i or
                 type(m.get("utf8Start")) is not int or type(m.get("utf8End")) is not int or
@@ -101,13 +108,13 @@ def prepare_document(document, boundaries, cancel):
     # A saved plan is authoritative. Never invoke another splitter on it.
     if document["segments"]: return document["segments"]
     plan, sources = [], []
-    for page in document["pages"]:
+    for page in units(document):
         if not trim(page["text"]): continue
         pieces = split(page["text"], boundaries, cancel)
         for paragraph, piece in enumerate(pieces, 1):
             if len(plan) >= 4096: raise CoreError("文档超过4096段保护。", "resource_limit")
             n = len(plan)
-            sources.append(dict(segmentID=n, page=page["id"], paragraph=paragraph,
+            sources.append(dict(segmentID=n, **{unit_field(document):page["id"]}, paragraph=paragraph,
                                 utf8Start=piece["utf8Start"], utf8End=piece["utf8End"], revision=page["revision"]))
             plan.append(dict(piece, id=n))
     if not plan: raise CoreError("所选范围没有可翻译文字；无文字页仍保留，请核对原页。", "zero_translatable_text")
@@ -116,7 +123,7 @@ def prepare_document(document, boundaries, cancel):
 
 
 def coverage(document):
-    pages = document["pages"]
+    pages = units(document)
     return ("识别进度" if document["mode"] == "ocr" else "提取覆盖") + "：" + " · ".join(
         f"{PAGE_LABELS[state]} {sum(p['state'] == state for p in pages)}" for state in ("pending", "recognizing", "extracted", "noText", "failed", "stopped"))
 
@@ -139,11 +146,18 @@ def document_text(task, only_page=None):
            f"翻译进度：{sum(p['state']=='completed' for p in parts)} / {len(parts)}段 · {job.get('phase', '尚未开始')}",
            LIMITATIONS if d["mode"] == "text" else "整页显式OCR；不混文字层。置信度、识别成功与内容准确完整是不同记录。请核对数字、否定、重复与顺序。",
            "所有所选页与已获得原文均保留；未完成译文明确标记。未应用草稿不属于有效原文/翻译输入。"]
-    for issue in (d.get("issue"), job.get("error")):
+    return "\n".join(out + content_text(task, d, only_page)) + "\n"
+
+
+def content_text(task, d, only_page=None):
+    parts = (task.get('text') or {}).get('segments', [])
+    image = d.get('mediaKind') == 'image'
+    out = []
+    for issue in (d.get("issue"), (task.get('text') or {}).get("error")):
         if issue: out.append("提示：" + issue)
-    for page in d["pages"]:
+    for page in units(d):
         if only_page is not None and page["id"] != only_page: continue
-        out.extend(["", f"===== {'PDF物理页 '+str(page['id']) if d['isPDF'] else 'TXT全文'} · {PAGE_LABELS[page['state']]} =====",
+        out.extend(["", f"===== {'图片内容' if image else 'PDF物理页 '+str(page['id']) if d['isPDF'] else 'TXT全文'} · {PAGE_LABELS[page['state']]} =====",
                     f"有效原文修订：{page['revision']} · 来源：{page_source_label(page)}",
                     "人工核对：" + ("已核对当前修订" if page["reviewed"] else "未人工核对")])
         if page.get("label") is not None: out.append("可选印刷标签：" + page["label"])
@@ -151,14 +165,15 @@ def document_text(task, only_page=None):
         raw = page.get("ocr")
         if raw:
             out.extend([f"原始OCR身份：{raw.get('rawRevision','旧格式未单列')} · 引擎：{raw.get('backend',d.get('extractionProfile'))}",
-                        f"渲染：{raw['pixelWidth']}×{raw['pixelHeight']} · rotation={raw['rotation']} · cropBox={raw['cropBox']}",
+                        (f"识别栅格：{raw['pixelWidth']}×{raw['pixelHeight']} · 源方向={raw['sourceGeometry']['exifOrientation']} · 缩放={raw['displayToRaster']} · 源hash={raw['sourceFingerprint']}" if image else
+                         f"渲染：{raw['pixelWidth']}×{raw['pixelHeight']} · rotation={raw['rotation']} · cropBox={raw['cropBox']}"),
                         "坐标：" + raw["coordinateSystem"], "[原始OCR观察项：顺序/ID/置信度/坐标/文字]"])
             for o in raw["observations"]: out.append(f"{o['order']} / {o['id']} / {o['confidence']} / {o['rect']} / {o['text']}")
             if raw.get('rawText') is not None: out.extend(['[完整原始识别文字]',raw['rawText']])
         if page.get('effectiveSource'):out.append('有效来源归属：'+str(page['effectiveSource']))
         if page.get('reviewRevision'):out.append('人工核对归属：'+page['reviewRevision'])
         out.extend(["[全部已获得的有效原文]", page["text"], "[对应译文]"])
-        mapping = [m for m in d["sources"] if m["page"] == page["id"]]
+        mapping = [m for m in d["sources"] if m[unit_field(d)] == page["id"]]
         if not mapping: out.append("【尚未建立翻译计划】" if trim(page["text"]) else "【未获得可翻译原文；" + PAGE_LABELS[page["state"]] + "】")
         for m in mapping:
             part = parts[m["segmentID"]] if parts else None
@@ -170,4 +185,4 @@ def document_text(task, only_page=None):
                 out.append("【" + LABELS[part["state"] if part else "pending"] + "】")
                 if part and part.get("error"): out.append("原因：" + part["error"])
         if str(page["id"]) in task["drafts"]: out.append("另有未应用编辑草稿；正式正文与翻译输入未使用此草稿。")
-    return "\n".join(out) + "\n"
+    return out

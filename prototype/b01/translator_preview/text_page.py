@@ -3,26 +3,32 @@ import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLabel,
     QPushButton, QPlainTextEdit, QListWidget, QListWidgetItem, QFileDialog, QSplitter)
 
 from translator_core.contracts import MAX_INPUT_BYTES, bilingual_text, sha
 from translator_core.store import atomic_write, safe_file
+from .components import Combo
 
 
 class TextPage(QWidget):
     task_kind = "文字"
-    def __init__(self, client, task_root, parent=None):
+    def __init__(self, client, task_root, parent=None, auto_refresh=True):
         super().__init__(parent)
+        self.auto_refresh = auto_refresh
         self.client, self.root = client, Path(task_root)
         self.saved = None; self.pending = False; self.pending_kind = None; self.export_target = None
+        self.history_draft = None
         self.pending_request = self.export_request = self.operation_request = None
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(10)
         actions = QHBoxLayout()
         self.new = QPushButton("新建文字任务")
-        self.direction = QComboBox(); self.direction.addItem("英文 → 简体中文", "en-zh"); self.direction.addItem("中文 → 英文", "zh-en")
+        self.direction = Combo(); self.direction.addItem("英文 → 简体中文", "en-zh"); self.direction.addItem("中文 → 英文", "zh-en")
         self.check = QPushButton("检查本机翻译服务")
-        for item in (self.new, self.direction, self.check): actions.addWidget(item)
+        self.return_draft = QPushButton("返回未提交草稿"); self.return_draft.hide()
+        self.return_draft.clicked.connect(self.restore_history_draft)
+        for item in (self.new, self.direction, self.check, self.return_draft): actions.addWidget(item)
         actions.addStretch(); outer.addLayout(actions)
         splitter = QSplitter(Qt.Horizontal)
         left = QWidget(); column = QVBoxLayout(left); column.setContentsMargins(0, 0, 6, 0)
@@ -65,20 +71,29 @@ class TextPage(QWidget):
         self.client.snapshot.connect(self.receive_snapshot); self.client.event.connect(self.receive_event)
         self.update_controls(self.client.state)
 
+    def source_read_only(self, state):
+        return bool(self.saved is not None and self.saved.get("task") is not None)
+
     def update_controls(self, state):
-        ready = state == "ready" and not self.pending
+        ready = state == "ready" and not self.pending and not self.client.task_request_pending()
         selected = self.saved is not None and self.saved.get("task") is not None
-        self.input.setReadOnly(selected)
+        bound = selected and self.client.current_task is not None and self.saved["task"]["id"] == self.client.current_task["id"]
+        read_only = self.source_read_only(state)
+        if self.input.isReadOnly() != read_only:
+            self.input.setReadOnly(read_only)
         self.direction.setEnabled(ready and not selected)
-        for button in (self.new, self.refresh, self.open, self.import_button, self.check): button.setEnabled(ready)
+        for button in (self.new, self.refresh, self.open, self.import_button, self.check, self.return_draft): button.setEnabled(ready)
         self.create.setEnabled(ready and not selected)
-        self.save.setEnabled(ready and selected and not self.saved.get("save_blocked"))
-        self.start.setEnabled(ready and selected and not self.saved.get("save_blocked"))
+        self.save.setEnabled(ready and bound and not self.saved.get("save_blocked"))
+        self.start.setEnabled(ready and bound and not self.saved.get("save_blocked"))
         self.cancel_button.setEnabled(state == "running")
-        self.export_button.setEnabled(selected and state in ("ready", "running", "cancelling") and not self.pending)
+        self.export_button.setEnabled(bound and state in ("ready", "running", "cancelling") and not self.pending)
+        if state == "connecting" and selected:
+            self.status.setText("正在重新连接；当前记录仅供回看，就绪后请重新打开任务。")
 
     def send(self, kind, **fields):
-        if self.client.state != "ready" or self.pending: return
+        if self.client.state != "ready" or self.pending or self.client.task_request_pending(): return
+        if kind in ("task.open", "task.import"): self.remember_history_draft()
         self.pending = True; self.pending_kind = kind; self.update_controls(self.client.state)
         self.pending_request = self.client.send(kind, **fields)
         if self.pending_request is None:
@@ -93,6 +108,24 @@ class TextPage(QWidget):
         self.saved = None; self.input.clear(); self.output.clear()
         self.status.setText("新任务 · 保存后才能开始；原任务保留在列表中。")
         self.update_controls(self.client.state)
+
+    def capture_draft(self):
+        if self.saved or not self.input.toPlainText(): return None
+        cursor = self.input.textCursor()
+        return (self.input.toPlainText(), self.direction.currentIndex(), cursor.position(), cursor.anchor())
+
+    def remember_history_draft(self):
+        if self.task_kind != "文字": return
+        draft = self.capture_draft()
+        if draft:
+            self.history_draft = draft; self.return_draft.show()
+
+    def restore_history_draft(self):
+        if not self.history_draft or self.client.state != "ready" or self.client.task_request_pending() or not self.client.can_change_task(): return
+        body, direction, position, anchor = self.history_draft
+        self.new_task(); self.input.setPlainText(body); self.direction.setCurrentIndex(direction)
+        cursor = self.input.textCursor(); cursor.setPosition(anchor); cursor.setPosition(position, QTextCursor.KeepAnchor)
+        self.input.setTextCursor(cursor); self.history_draft = None; self.return_draft.hide()
 
     def create_task(self):
         raw = self.input.toPlainText().encode()
@@ -131,7 +164,13 @@ class TextPage(QWidget):
             return
         task = snapshot.get("task")
         if task and task["kind"] != self.task_kind:
-            self.saved = None; self.update_controls(self.client.state); return
+            self.remember_history_draft()
+            had_saved_task = self.saved is not None
+            self.saved = None
+            if had_saved_task: self.input.clear()
+            self.output.clear()
+            self.status.setText("当前任务已切换；可新建或打开文字任务，原记录保留在历史中。")
+            self.update_controls(self.client.state); return
         self.saved = snapshot
         if not task: return
         self.input.setPlainText(task["input"])
@@ -151,16 +190,17 @@ class TextPage(QWidget):
 
     def receive_event(self, event):
         kind = event["type"]
-        if kind == "ready": self.send("task.list")
+        if kind == "ready" and self.auto_refresh: self.send("task.list")
         elif kind in ("task.done", "error"):
-            if event["request_id"] not in (self.pending_request, self.export_request, self.operation_request): return
+            if event["request_id"] not in (self.pending_request, self.export_request, self.operation_request):
+                self.update_controls(self.client.state); return
             completed_kind = self.pending_kind
             if event["request_id"] == self.pending_request:
                 self.pending = False; self.pending_request = self.pending_kind = None
             if kind == "error":
                 self.status.setText(event["error"].get("message", event["error"]["code"])); self.export_target = None
             self.update_controls(self.client.state)
-            if kind == "task.done" and completed_kind in ("task.create", "task.import", "task.save", "document.create"):
+            if self.auto_refresh and kind == "task.done" and completed_kind in ("task.create", "task.import", "task.save", "document.create"):
                 self.send("task.list")
         elif kind == "operation.finished":
             if event["request_id"] != self.operation_request: return

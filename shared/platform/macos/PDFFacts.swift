@@ -56,8 +56,13 @@ do {
     let pdfBackend = "\(version);macOS=\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
     let isOCR = action == "ocr_probe" || action == "ocr"
     let direction = req["direction"] as? String ?? "en-zh"
-    guard direction == "en-zh" || direction == "zh-en" else { throw failure("方向无效") }
     let vision = recognizer(direction)
+    if let languages = req["recognitionLanguages"] as? [String] {
+        guard !languages.isEmpty && languages.count <= 2 else { throw failure("识别语言无效") }
+        vision.recognitionLanguages = languages
+    } else if direction != "en-zh" && direction != "zh-en" {
+        throw failure("方向无效")
+    }
     let backend = isOCR ? "vision-accurate-v1;macOS=\(os.majorVersion).\(os.minorVersion).\(os.patchVersion);revision=\(vision.revision)" : pdfBackend
     var reply: [String:Any] = ["schema":1,"request":request,"action":action,"backend":backend,"complete":true]
     let start=Date()

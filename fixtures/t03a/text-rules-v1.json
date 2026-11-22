@@ -1,0 +1,448 @@
+{
+  "schema": 1,
+  "rule": "complete-text-routing-v1",
+  "expected_counting": "qt6102-grapheme-v1",
+  "note": "Independent literal expectations. Only Mac executed in T03-A; Windows paused.",
+  "cases": [
+    {
+      "id": "empty-en",
+      "source": "",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": true,
+        "graphemes": 0,
+        "english_words": 0,
+        "target_kind": "none"
+      }
+    },
+    {
+      "id": "empty-zh",
+      "source": "",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": true,
+        "graphemes": 0,
+        "english_words": null,
+        "target_kind": "none"
+      }
+    },
+    {
+      "id": "frozen-whitespace",
+      "source": "\t \r\n​　",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": true,
+        "graphemes": 0,
+        "english_words": 0,
+        "target_kind": "none"
+      }
+    },
+    {
+      "id": "python-extra-space-is-content",
+      "source": "\u001c",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "english-20-words",
+      "source": "a a a a a a a a a a a a a a a a a a a a",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 39,
+        "english_words": 20,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "english-21-words-only",
+      "source": "a a a a a a a a a a a a a a a a a a a a a",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 41,
+        "english_words": 21,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "english-160-graphemes",
+      "source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 160,
+        "english_words": 1,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "english-161-graphemes-only",
+      "source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 161,
+        "english_words": 1,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "english-both-at-limit",
+      "source": "a a a a a a a a a a a a a a a a a a a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 160,
+        "english_words": 20,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "english-20-words-161",
+      "source": "a a a a a a a a a a a a a a a a a a a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 161,
+        "english_words": 20,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "english-both-over",
+      "source": "1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567 1234567",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 167,
+        "english_words": 21,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "chinese-40-including-punctuation",
+      "source": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中。",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 40,
+        "english_words": null,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "chinese-41-including-punctuation",
+      "source": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中。",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 41,
+        "english_words": null,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "ordinary-short-sentence",
+      "source": "Please keep the window open.",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 28,
+        "english_words": 5,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "apostrophe-hyphen-number",
+      "source": "don't well-known 2026 !!!",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 25,
+        "english_words": 3,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "punctuation-only",
+      "source": "!!! … —",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 7,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "multiple-internal-spaces",
+      "source": "  alpha   beta  ",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 12,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "internal-tab",
+      "source": "a\t\tb",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 4,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "internal-LF",
+      "source": " a\nb ",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 3,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "internal-CRLF",
+      "source": " a\r\nb ",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 3,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "mixed-en",
+      "source": "Hello 世界 123",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 12,
+        "english_words": 3,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "mixed-zh",
+      "source": "Hello 世界 123",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 12,
+        "english_words": null,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "mixed-change-direction-en",
+      "source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 41,
+        "english_words": 1,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "mixed-change-direction-zh",
+      "source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 41,
+        "english_words": null,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "combining-and-precomposed",
+      "source": "é é",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 3,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "combining-40",
+      "source": "éééééééééééééééééééééééééééééééééééééééé",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 40,
+        "english_words": null,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "combining-41",
+      "source": "ééééééééééééééééééééééééééééééééééééééééé",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 41,
+        "english_words": null,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "supplementary-han",
+      "source": "𠀀",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": null,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "supplementary-letter-token",
+      "source": "𠀀",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 1,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "family-ZWJ",
+      "source": "👨‍👩‍👧‍👦",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "skin-tone",
+      "source": "👍🏽",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "flag",
+      "source": "🇨🇳",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "emoji-mixed",
+      "source": "👨‍👩‍👧‍👦 👍🏽 🇨🇳",
+      "direction": "zh-en",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 5,
+        "english_words": null,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "emoji-160",
+      "source": "👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 160,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "emoji-161",
+      "source": "👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 161,
+        "english_words": 0,
+        "target_kind": "translation"
+      }
+    },
+    {
+      "id": "unicode-numbers",
+      "source": "１２３ Ⅻ ²",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 7,
+        "english_words": 3,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "internal-zero-width-space",
+      "source": "a​b",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 3,
+        "english_words": 2,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "NBSP-and-ideographic-space",
+      "source": "a b　c",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 5,
+        "english_words": 3,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "zero-width-joiner-is-content",
+      "source": "‍",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 0,
+        "target_kind": "translation_with_explanation"
+      }
+    },
+    {
+      "id": "dense-combining-over-unit-bytes",
+      "source": "é́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́́",
+      "direction": "en-zh",
+      "expected": {
+        "is_empty": false,
+        "graphemes": 1,
+        "english_words": 1,
+        "target_kind": "translation_with_explanation"
+      }
+    }
+  ]
+}
