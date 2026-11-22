@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import CoreError
 from .resources import (CHUNK, CHECK_SECONDS, FILE_COUNT, SET_LIMIT, ResourceError, atomic_json,
-                        content_identity, encoded, json_value, manifest_entries, no_links,
+                        content_identity, encoded, json_value, manifest_entries, manifest_hasher, manifest_matches, no_links,
                         open_readonly, relative_name, safe_read, stat_token, stop_check, token,
                         validate_spec, verify_resource, bounded_string)
 
@@ -74,7 +74,7 @@ def copy_verified_file(source, target, expected, cancel, deadline, progress):
         before = stat_token(os.fstat(stream.fileno()))
         if not stat.S_ISREG(before[2]) or before[3] != expected['size']:
             raise ResourceError('resource_corrupt', '来源大小或类型不匹配。')
-        hashed = hashlib.sha256()
+        hashed = manifest_hasher(expected)
         count = 0
         fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'wb') as output:
@@ -88,7 +88,7 @@ def copy_verified_file(source, target, expected, cancel, deadline, progress):
                 progress(count)
             output.flush()
             os.fsync(output.fileno())
-        if (count != expected['size'] or hashed.hexdigest() != expected['sha256'] or
+        if (count != expected['size'] or not manifest_matches(expected, hashed) or
                 before != stat_token(os.fstat(stream.fileno())) or before != token(source)):
             raise ResourceError('resource_changed', '复制期间来源改变或校验不符。')
         os.chmod(target, stat.S_IMODE(before[2]) & 0o755)

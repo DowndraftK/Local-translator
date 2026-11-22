@@ -45,9 +45,9 @@ def vision_languages(direction):
 
 def speech_language(variant, direction):
     source, _ = direction_pair(direction)
-    if variant == 'small.en' and source != 'en':
-        raise CoreError('Whisper small.en 仅支持英语原文。请选择多语 Whisper 模型，或将原文语言改为英语。',
+    from .speech_presets import preset
+    row = preset(variant)
+    if source not in row['languages']:
+        raise CoreError(f"{row['name']} 在本版用于英语原文。请选择多语 Whisper 模型，或将原文语言改为英语。",
                         'asr_language_unsupported')
-    if variant not in ('small.en', 'large-v3-turbo'):
-        raise CoreError('请在偏好设置导入并检查兼容的 Whisper 模型。', 'audio_binding')
     return source

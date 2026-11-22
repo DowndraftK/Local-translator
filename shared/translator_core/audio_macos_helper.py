@@ -13,12 +13,13 @@ import time
 import wave
 
 ACTIVE_EXECUTION = None
+FACTS = None
 
 
 def emit(kind, **fields):
     if ACTIVE_EXECUTION is not None:
         fields['execution'] = ACTIVE_EXECUTION
-    print(json.dumps(dict(event=kind, **fields), ensure_ascii=False, allow_nan=False), flush=True)
+    print(json.dumps(dict(event=kind, **fields), ensure_ascii=False, allow_nan=False), file=FACTS, flush=True)
 
 
 def transcribe_refinement(audio_path, model, language='en'):
@@ -247,6 +248,7 @@ async def live_host(request):
 
 
 def main():
+    global FACTS
     request = json.loads(Path(sys.argv[1]).read_bytes())
     expected_parent = request.get('parent_pid')
     if type(expected_parent) is int:
@@ -261,6 +263,12 @@ def main():
         threading.Thread(target=watch_parent, name='owned-parent-watch', daemon=True).start()
     if request['stage'] == 'live_host': asyncio.run(live_host(request))
     elif request['stage'] == 'decode': decode(request)
+    elif request['config'].get('backend') == 'qwen3-vllm-metal':
+        FACTS = os.fdopen(os.dup(sys.stdout.fileno()), 'w', encoding='utf-8')
+        os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+        sys.path.insert(0, str(Path(__file__).parent))
+        from qwen_audio_helper import recognize
+        recognize(request, emit)
     else: asyncio.run(speech(request))
 
 

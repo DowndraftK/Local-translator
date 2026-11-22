@@ -151,7 +151,8 @@ class PreviewWindow(QMainWindow):
         self.image_upload.image_selected.connect(self.select_image)
         self.image_upload.image_paste_requested.connect(self.paste_image)
         for page in (self.text_container, self.document_container, self.image_container): self.translation_stack.addWidget(page)
-        self.audio_workspace = AudioWorkspace(self.client, task_root, local=local)
+        external_speech = bool(self.identity.get('external_speech_presets'))
+        self.audio_workspace = AudioWorkspace(self.client, task_root, local=local, external_speech=external_speech)
         self.audio_page = AudioPage(workspace=self.audio_workspace, whole_cards=local); self.history_page = SummaryView(self.bridge)
         self.settings_page = SettingsPage(self.theme, simple_resources=local)
         self.preferences_panel = (LocalPreferencesPanel(self.client.preferences) if local else
@@ -176,7 +177,7 @@ class PreviewWindow(QMainWindow):
                 and not (self.client.preferences.description or {}).get('dirty')
                 and not (self.client.preferences.description or {}).get('unconfirmed')
                 and not self.client.resources.pending and not (self.client.resources.description or {}).get('dirty')
-            ))
+            ), external_speech=external_speech)
             self.settings_page.install_resource_overview(self.environment_page)
         else:
             self.dictionary_resources = DictionaryResources(self.client.dictionary)

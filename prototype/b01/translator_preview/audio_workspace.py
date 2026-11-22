@@ -13,6 +13,7 @@ from translator_core.audio import millis, timestamp, subtitle_text
 from translator_core.contracts import sha
 from translator_core.languages import direction_label, speech_language
 from translator_core.resource_macos import DEFAULT_WHISPER, LEGACY_WHISPER
+from translator_core.speech_presets import MODES, PRESETS
 from translator_core.store import atomic_write, safe_file
 from .components import Button, Combo, DropZone, hbox, label, vbox, scrollable
 from .capture_controls import CaptureControls, STATES as CAPTURE_STATES
@@ -42,7 +43,7 @@ class AudioWorkspace(QWidget):
     controls_changed = Signal()
     back_requested = Signal()
 
-    def __init__(self, client, task_root, *, local=False):
+    def __init__(self, client, task_root, *, local=False, external_speech=False):
         super().__init__(); self.client = client; self.root = Path(task_root)
         self.local = local
         self.chosen = False
@@ -55,6 +56,8 @@ class AudioWorkspace(QWidget):
         vbox(self).addWidget(scrollable(content))
         self.capture = CaptureControls(self)
         self.live_mode = False
+        self.external_speech = external_speech
+        self.speech_choices_loaded = False
         row = hbox(spacing=8)
         self.back = Button('返回', 'back', 'quiet', self.back_requested.emit)
         self.choose = Button('选择音频文件…', 'folder', 'secondary', self.choose_file)
@@ -75,8 +78,9 @@ class AudioWorkspace(QWidget):
             self.direction = LanguagePair()
             self.speech_model = Combo()
             self.speech_model.setAccessibleName('语音转文字模型')
-            self.speech_model.addItem('Whisper small.en · 英语', DEFAULT_WHISPER)
-            self.speech_model.addItem('Whisper large-v3-turbo · 多语', LEGACY_WHISPER)
+            variants = PRESETS if external_speech else (DEFAULT_WHISPER, LEGACY_WHISPER)
+            for variant in variants:
+                self.speech_model.addItem(PRESETS[variant]['name'], variant)
             self.model = TranslationModel(client)
             for title, widget in (('翻译方向',self.direction),('语音转文字模型',self.speech_model),('翻译模型',self.model)):
                 fields.addWidget(captioned(title, widget))
@@ -87,7 +91,9 @@ class AudioWorkspace(QWidget):
             self.model.activated.connect(self.choices_changed)
             self.speech_status = label('', 'tiny', True)
             outer.addWidget(self.speech_status)
-            client.speech_catalog_changed.connect(self.refresh_controls)
+            client.speech_catalog_changed.connect(self.update_speech_catalog)
+            if external_speech:
+                self.speech_model.activated.connect(self.save_speech_choice)
         self.source_label = label('选择音频后，先保存可恢复来源。识别、翻译与精修分别主动开始。', 'secondary', True)
         outer.addWidget(self.source_label)
         outer.addWidget(self.capture)
@@ -193,6 +199,7 @@ class AudioWorkspace(QWidget):
 
     def ime_blocked(self):return self.composing or self.commit_guard
     def set_live_mode(self, live):
+        changed = self.live_mode != live
         self.live_mode = live
         self.capture.setVisible(live)
         for widget in (self.choose, self.create, self.drop): widget.setVisible(not live)
@@ -203,7 +210,31 @@ class AudioWorkspace(QWidget):
                 self.status.setText('尚未开始同传。' if live else '等待选择音频文件。')
             if live and not self.capture.description:
                 self.send('capture.describe')
+        if changed and self.external_speech and (live or not self.task()):
+            self.load_speech_choice()
         self.refresh_controls()
+
+    def load_speech_choice(self):
+        mode = 'live' if self.live_mode else 'file'
+        variant = self.client.speech_choices.get(mode, DEFAULT_WHISPER)
+        index = self.speech_model.findData(variant)
+        if index >= 0:
+            with QSignalBlocker(self.speech_model):
+                self.speech_model.setCurrentIndex(index)
+
+    def update_speech_catalog(self):
+        if self.external_speech and isinstance(self.client.speech_catalog, dict) and not self.speech_choices_loaded:
+            self.speech_choices_loaded = True
+            if not self.task() or self.live_mode:
+                self.load_speech_choice()
+        elif self.client.speech_catalog is None:
+            self.speech_choices_loaded = False
+        self.refresh_controls()
+
+    def save_speech_choice(self, *_):
+        variant = self.speech_model.currentData()
+        mode = 'live' if self.live_mode else 'file'
+        self.client.send('environment.speech_choice', item=variant, mode=mode)
 
     def choices_changed(self, *_):
         self.chosen = True
@@ -221,12 +252,20 @@ class AudioWorkspace(QWidget):
         return dict(direction=self.direction.direction(), asr_model=self.speech_model.currentData(),
                     model=self.model.effective())
 
-    def speech_issue(self):
+    def speech_issue(self, capability=None, variant=None):
         if self.local:
+            variant = variant or self.speech_model.currentData()
             try:
-                speech_language(self.speech_model.currentData(),self.direction.direction())
+                speech_language(variant, self.direction.direction())
             except CoreError as exc:
                 return str(exc)
+            if self.external_speech:
+                capability = capability or ('speech.continuous_asr' if self.live_mode else 'speech.file_asr')
+                catalog = self.client.speech_catalog or {}
+                status = catalog.get(variant, {}).get('modes', {}).get(capability, '正在检测')
+                if status != '可用':
+                    return (f"{PRESETS[variant]['name']} · {MODES[capability]}{status}。"
+                            "请在「偏好设置 → 语音资源」查看。")
         return ''
     def task(self):return self.saved['task'] if self.saved else None
     def cue(self):
@@ -247,6 +286,19 @@ class AudioWorkspace(QWidget):
             choosing = ready and (self.live_mode or not task)
             for field in (self.direction, self.speech_model, self.model):
                 field.setEnabled(choosing)
+            if self.external_speech:
+                capability = 'speech.continuous_asr' if self.live_mode else 'speech.file_asr'
+                rows = self.client.speech_catalog or {}
+                with QSignalBlocker(self.speech_model):
+                    for index in range(self.speech_model.count()):
+                        key = self.speech_model.itemData(index)
+                        row = PRESETS[key]
+                        status = rows.get(key, {}).get('modes', {}).get(capability, '正在检测')
+                        try:
+                            speech_language(key, self.direction.direction())
+                        except CoreError:
+                            status = '仅英语'
+                        self.speech_model.setItemText(index, f"{row['name']} · {status}")
             self.create.setToolTip(self.speech_issue() or '保存选中的音频来源')
             variant = self.speech_model.currentData()
             speech = self.client.speech_catalog
@@ -261,6 +313,13 @@ class AudioWorkspace(QWidget):
         if task and task['audio'].get('recording') and not task['audio']['pcm']: self.asr.setEnabled(False)
         self.translate.setEnabled(writable and clean and task['audio']['asrComplete'] and bool(task['audio']['cues']) and not task['drafts'] if task else False)
         self.refine.setEnabled(writable and clean and bool(task['audio']['pcm']) and not task['drafts'] if task else False)
+        if self.external_speech and task:
+            model = task['audio'].get('asrModel') or LEGACY_WHISPER
+            for button, capability in ((self.asr, 'speech.file_asr'), (self.refine, 'speech.refine')):
+                issue = self.speech_issue(capability, model)
+                if issue:
+                    button.setEnabled(False)
+                button.setToolTip(issue)
         self.input.setReadOnly(not (writable and cue)); self.cue_list.setEnabled(not self.ime_blocked())
         has_draft=bool(cue and (self.key(cue) in self.local_drafts or cue['id'] in task['drafts']))
         self.apply.setEnabled(writable and has_draft);self.discard.setEnabled(writable and has_draft)

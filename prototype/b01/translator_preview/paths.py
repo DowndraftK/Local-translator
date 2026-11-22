@@ -69,7 +69,8 @@ def package_resource_defaults(package, identity, data_root, managed=None, select
     replacements = identity.get('package_resource_paths', {})
     local = identity.get('delivery_layout') == LOCAL_DELIVERY
     runtime = None
-    if local and not identity.get('bundled_whisper'):
+    external_presets = identity.get('external_speech_presets')
+    if local and not (identity.get('bundled_whisper') or external_presets):
         preferred = next((Path(spec['root']) for spec in (selection or {}).get('resources', [])
                           if spec['resource_id'] == 'speech.runtime'), None)
         runtime = package_whisper_runtime(package, managed, data_root, preferred)
@@ -85,7 +86,9 @@ def package_resource_defaults(package, identity, data_root, managed=None, select
             spec['root'] = str(runtime)
             if name == 'speech.runtime':
                 spec['manifest']['path'] = str(runtime/'component.json')
-        if local and not identity.get('bundled_whisper') and name in SPEECH_FOLDERS:
+        if external_presets and name in SPEECH_FOLDERS:
+            spec['root'] = str(speech_target(data_root, name, spec))
+        elif local and not identity.get('bundled_whisper') and name in SPEECH_FOLDERS:
             spec['root'] = str(discover_speech_folder(data_root, spec, package.parents[3]))
     return value
 
@@ -102,13 +105,15 @@ def initialize_package_resources(package, identity, data_root, *, managed=None, 
     if manager.selection:
         current = deepcopy(manager.selection['resources'])
         defaults = {spec['resource_id']: spec for spec in value['resources']}
-        if identity.get('bundled_whisper'):
-            changes = upgraded_speech_resources(package, data_root, value, manager.saved_selection)
+        preset_delivery = identity.get('external_speech_presets')
+        if identity.get('bundled_whisper') or preset_delivery:
+            changes = upgraded_speech_resources(package, data_root, value, manager.saved_selection,
+                                                external_only=bool(preset_delivery))
             current = [changes.pop(spec['resource_id'], spec) for spec in current]
             current.extend(changes.values())
         for spec in current:
             replacement = defaults.get(spec['resource_id'])
-            if identity.get('bundled_whisper') and spec['resource_id'] in SPEECH_COMPONENTS:
+            if (identity.get('bundled_whisper') or preset_delivery) and spec['resource_id'] in SPEECH_COMPONENTS:
                 continue
             if local and replacement and spec['resource_id'] == 'speech.bridge':
                 spec.update(replacement)
@@ -142,13 +147,13 @@ def initialize_package_resources(package, identity, data_root, *, managed=None, 
     manager.save()
 
 
-def upgraded_speech_resources(package, data_root, defaults, selection):
+def upgraded_speech_resources(package, data_root, defaults, selection, *, external_only=False):
     """Relocate bundled files and retain validated external choices across upgrades."""
     saved = {spec['resource_id']: spec for spec in selection['resources']}
     choices = {spec['resource_id']: dict(spec) for spec in defaults['resources']
                if spec['resource_id'] in SPEECH_COMPONENTS}
     runtime = saved.get('speech.runtime')
-    if (runtime and speech_origin(runtime['root'], data_root)!='bundled'
+    if (not external_only and runtime and speech_origin(runtime['root'], data_root)!='bundled'
             and external_speech_root(runtime['root']) and whisper_runtime_present(runtime)):
         root = runtime['root']
         choices['speech.runtime'].update(root=root)
@@ -156,21 +161,26 @@ def upgraded_speech_resources(package, data_root, defaults, selection):
                                                       path=str(Path(root)/'component.json'))
         choices['speech.backend'].update(root=root)
     assets = saved.get('speech.assets')
-    if assets and speech_origin(assets['root'], data_root)!='bundled' and external_speech_root(assets['root']):
+    if assets and not in_app(assets['root']) and external_speech_root(assets['root']):
         candidate = dict(choices['speech.assets'], root=assets['root'])
         if speech_files_present(candidate):
             choices['speech.assets'] = candidate
     old_model = saved.get('speech.model')
-    if old_model and speech_origin(old_model['root'], data_root)!='bundled':
+    if old_model and not in_app(old_model['root']):
         variant = whisper_variant(old_model['manifest']['sha256'])
         if variant:
-            model = package_speech_variants(package, data_root, defaults, selection)[variant]
+            model = package_speech_variants(package, data_root, defaults, selection,
+                                            external_only=external_only)[variant]
             if speech_files_present(model):
                 choices['speech.model'] = model
     return choices
 
 
-def package_speech_variants(package, data_root, defaults, selection=None):
+def in_app(path):
+    return any(part.lower().endswith('.app') for part in Path(path).parts)
+
+
+def package_speech_variants(package, data_root, defaults, selection=None, *, external_only=False):
     default = next(row for row in defaults['resources'] if row['resource_id']=='speech.model')
     manifest = package/'shared/translator_core/whisper-large-v3-turbo.model.json'
     raw = safe_read(manifest, 4096)
@@ -189,18 +199,19 @@ def package_speech_variants(package, data_root, defaults, selection=None):
         if selected and whisper_variant(selected['manifest']['sha256'])==variant:
             path = selected['root']
             current = speech_origin(path,data_root)!='bundled' or path==spec['root']
-            if current and external_speech_root(path) and speech_files_present(dict(spec,root=path)):
+            if (current and (not external_only or not in_app(path)) and external_speech_root(path)
+                    and speech_files_present(dict(spec,root=path))):
                 chosen_root = Path(path)
         if not chosen_root:
             local = speech_target(data_root, 'speech.model', spec)
             imports = sorted(local.parent.glob(local.name+'-import-*'))
             chosen_root = next((folder for folder in (local,*imports) if speech_files_present(
                 dict(spec,root=str(folder)))), None)
-        if not chosen_root:
+        if not chosen_root and not external_only:
             if speech_origin(spec['root'],data_root)=='bundled' and speech_files_present(spec):
                 chosen_root = Path(spec['root'])
         if not chosen_root:
-            chosen_root = discover_speech_folder(data_root,spec,package.parents[3])
+            chosen_root = local if external_only else discover_speech_folder(data_root,spec,package.parents[3])
         result[variant] = dict(spec,root=str(chosen_root))
     return result
 

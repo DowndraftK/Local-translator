@@ -40,6 +40,7 @@ from . import PREVIEW_ID, PRODUCT_VERSION, DEFAULT_ENDPOINT
 from .paths import (LOCAL_DELIVERY, data_directory, initialize_package_resources,
                     package_resource_defaults, package_speech_variants, restore_bundled_speech,
                     select_speech_root, speech_origin)
+from .speech_library import SpeechLibrary
 from .protocol import (PROTOCOL, MAX_FRAME_BYTES, MAX_STEPS, SNAPSHOT_CHUNK_BYTES, STARTUP_ERROR_PREFIX, ProtocolError, WORKBENCH_OPERATIONS,
                        decode, encode, identifier)
 
@@ -88,6 +89,7 @@ class Worker:
         self.endpoint_override = endpoint
         self.configuration_lock = threading.RLock()
         self.local_package = local_package
+        self.speech = None
         self.environment_thread = None
         self.environment_cancel = threading.Event()
         self.ollama_discovery = None
@@ -145,6 +147,8 @@ class Worker:
         if local_package:
             package, identity = local_package
             initialize_package_resources(package, identity, preview_data_root, managed=self.managed, manager=self.resources)
+            if identity.get('external_speech_presets'):
+                self.speech = SpeechLibrary(package, Path(preview_data_root), self.tasks.audio_adapter)
         if self.resources: self.resources.restore_dictionary()
         if self.tasks: self.tasks.resources = self.resources
 
@@ -209,6 +213,27 @@ class Worker:
                 raise CoreError('请先处理待确认的任务保存。', 'save_blocked')
             from translator_core.local_environment import SPEECH_FOLDERS
             item, path = req.get('item'), req.get('path')
+            if self.speech:
+                if kind == 'environment.speech_choice':
+                    with self.configuration_lock:
+                        self.speech.select(req.get('mode'), item)
+                    self.emit('environment.choice', req, choices=self.speech.state['choices'])
+                    return
+                if kind in ('environment.speech_import', 'environment.speech_verify'):
+                    from translator_core.speech_presets import preset
+                    if kind == 'environment.speech_import':
+                        part = req.get('part')
+                        if part not in ('model', 'assets', 'runtime') or not isinstance(path, str):
+                            raise CoreError('请选择本地模型、辅助资源或运行包。', 'speech_import')
+                        no_links(path)
+                        if part != 'runtime':
+                            preset(item)
+                    else:
+                        preset(item)
+                    self.start_text(req)
+                    return
+                if kind != 'environment.dictionary':
+                    raise CoreError('请从语音资源页导入本机文件。', 'unsupported_operation')
             if kind == 'environment.download' and (
                     req.get('user_requested') is not True or item not in SPEECH_FOLDERS):
                 raise CoreError('请使用资源页的下载按钮选择固定版本。', 'download_source')
@@ -242,6 +267,8 @@ class Worker:
             voice['sources'] = {spec['resource_id']: dict(origin=speech_origin(spec['root'],root),
                                path=spec['root'],version=spec['version']) for spec in specs
                                if spec['resource_id'] in ('speech.runtime','speech.model','speech.assets')}
+            if self.speech:
+                report['speech_presets'] = self.speech.report(defaults, dict(resources=specs))
             services = report['ollama']['external']
             with self.configuration_lock:
                 self.ollama_discovery = (configured_endpoint, services)
@@ -295,6 +322,28 @@ class Worker:
                 self.dictionary_mode = 'custom' if chosen else 'bundled'
                 self.dictionary_warning = None
                 return {'dictionary': self.dictionary.description()}
+        if self.speech and kind in ('environment.speech_import', 'environment.speech_verify'):
+            selection, defaults = self.speech_defaults()
+            if kind == 'environment.speech_import':
+                key, record = self.speech.stage_import(item, req['part'], Path(req['path']),
+                                                      defaults, selection, cancel, progress)
+                with self.operation_lock, self.configuration_lock:
+                    if cancel.is_set():
+                        raise Cancelled()
+                    self.tasks.audio_adapter.close()
+                    self.speech.commit(roots=dict(self.speech.state['roots'], **{key: record}))
+                    op['committed'] = True
+                return {'message': '资源已核对并保存。资源齐备后可运行本机验证。'}
+            specs = self.speech.specs(item, defaults, selection)
+            result = self.speech.verify(item, specs, cancel, lambda message: self.emit(
+                'environment.progress', req, operation_id=op['id'], lease_id=op['lease'], message=message))
+            with self.operation_lock, self.configuration_lock:
+                if cancel.is_set():
+                    raise Cancelled()
+                atomic_json(self.speech.check_root/f'{item}.json', result)
+                op['committed'] = True
+            failures = [outcome['message'] for outcome in result['modes'].values() if not outcome['passed']]
+            return {'message': '能力验证完成。' if not failures else '部分能力未通过，请查看该模型的状态与结果。'}
         if kind=='environment.restore_speech':
             with self.operation_lock, self.configuration_lock:
                 if cancel.is_set():
@@ -415,14 +464,35 @@ class Worker:
         from translator_core.translation_routes import verify_direction
         direction, variant = req.get('direction'), req.get('asr_model')
         language = speech_language(variant,direction)
+        binding = None
+        if live and self.speech:
+            binding = self.audio_resource_binding(req,op,variant,language,'speech.continuous_asr')
         recipe, version, engine, execution = self.resolve_workbench(req.get('model'),direction,op)
         verify_direction(engine,recipe,version,self.workbench.evidence)
         setup = dict(recipe=recipe,execution=execution,asr_model=variant)
         if live:
-            setup['binding'] = self.audio_resource_binding(req,op,variant,language,'speech.continuous_asr')
+            setup['binding'] = binding or self.audio_resource_binding(req,op,variant,language,'speech.continuous_asr')
         return setup
 
+    def speech_defaults(self):
+        package, identity = self.local_package
+        selection = self.resources.saved_selection
+        return selection, package_resource_defaults(package, identity, self.resources.root.parent,
+                                                    self.managed, selection)
+
     def audio_resource_binding(self, req, op, variant, language, capability):
+        if self.speech:
+            from translator_core.speech_presets import MODES, preset
+            row = preset(variant)
+            if capability not in row['modes']:
+                raise CoreError(f"{row['name']} 本版未开放{MODES[capability]}。", 'audio_binding')
+            selection, defaults = self.speech_defaults()
+            specs = self.speech.specs(variant, defaults, selection)
+            record = self.speech.current_check(variant, specs)
+            if not record or not record['modes'].get(capability, {}).get('passed'):
+                raise CoreError(f"请在「偏好设置 → 语音资源」为 {row['name']} 补齐资源并完成{MODES[capability]}验证。",
+                                'capability_unverified')
+            return self.speech.binding(variant, language, capability, specs, record)
         from translator_core.local_environment import speech_files_present, whisper_runtime_present
         from translator_core.resources import EXECUTION
         package, identity = self.local_package
@@ -1124,11 +1194,23 @@ class Worker:
             elif req["type"] in ("audio.asr", "audio.refine"):
                 task = self.tasks.task
                 variant = task['audio'].get('asrModel') if self.workbench and task and task['kind']=='音频' else None
+                verified = None
+                if self.speech and not variant:
+                    # Older audio tasks used Whisper large-v3-turbo and defaulted to English.
+                    from translator_core.resource_macos import LEGACY_WHISPER
+                    variant = LEGACY_WHISPER
                 if variant:
                     from translator_core.languages import speech_language
                     capability = 'speech.refine' if req['type']=='audio.refine' else 'speech.file_asr'
-                    self.audio_resource_binding(req,op,variant,speech_language(variant,task['configuration']['direction']),capability)
-                status=self.tasks.recognize_audio(op["id"],op["cancel"],lambda snapshot:self.snapshot(req,snapshot,op),req["type"]=="audio.refine")
+                    language = speech_language(variant,task['configuration']['direction'])
+                    binding = self.audio_resource_binding(req,op,variant,language,capability)
+                    if self.speech:
+                        selection, defaults = self.speech_defaults()
+                        specs = self.speech.specs(variant, defaults, selection)
+                        verified = {capability: binding, 'audio.decode': self.speech.binding(variant, language,
+                            'audio.decode', specs, dict(checked_at=binding['checked_at'], receipt=binding['check']))}
+                status=self.tasks.recognize_audio(op["id"],op["cancel"],
+                    lambda snapshot:self.snapshot(req,snapshot,op),req["type"]=="audio.refine", verified=verified)
             elif req["type"] == "audio.play":
                 status=self.tasks.play_audio(op["id"],op["cancel"],lambda value,folder:self.emit("audio.playback",req,operation_id=op["id"],lease_id=op["lease"],task_id=req["task_id"],pcm=self.tasks.task["audio"]["pcm"]["fingerprint"],playback=value),req.get('start_sample',0))
             elif req['type'] == 'image.select':

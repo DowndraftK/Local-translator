@@ -52,44 +52,26 @@ def assemble_install_sources(catalog_path, notices, target):
     return catalog
 
 
-def assemble_whisper(reference, model, notices, target):
-    """Copy the verified Mac speech runtime, English weights and audio assets."""
+def assemble_whisper_runtime(reference, target):
+    """Copy the pinned interpreter and code, leaving all model assets external."""
     from translator_core.resource_lifecycle import copy_manifest_resource
-    from translator_core.resource_macos import DEFAULT_WHISPER, trusted_manifest, whisper_variant
+    from translator_core.resource_macos import trusted_manifest
     from translator_core.resources import verify_resource
 
     specs = {spec['resource_id']: spec for spec in reference['resources']}
-    small = specs['speech.model']
-    if whisper_variant(small['manifest']['sha256']) != DEFAULT_WHISPER:
-        raise ValueError('The bundled speech model must be the pinned Whisper small.en.')
     if not all(trusted_manifest(name, specs[name]['manifest']['sha256'])
                for name in ('speech.runtime', 'speech.backend', 'speech.model', 'speech.assets')):
         raise ValueError('The submitted speech references do not match the retained component pins.')
-    small = dict(small, root=str(model))
     target.mkdir()
-    roots = {'speech.runtime': target/'runtime',
-             'speech.model': target/'small.en',
-             'speech.assets': target/'assets'}
     cancel = threading.Event()
     deadline = time.monotonic() + 300
-    for spec in (specs['speech.runtime'], small, specs['speech.assets']):
-        destination = roots[spec['resource_id']]
-        copy_manifest_resource(spec, destination, cancel, deadline, lambda *_: None)
-        destination.chmod(0o755)
-        for directory in destination.rglob('*'):
-            if not directory.is_symlink() and directory.is_dir():
-                directory.chmod(0o755)
-    roots['speech.backend'] = roots['speech.runtime']
-    verify_resource(dict(specs['speech.backend'], root=str(roots['speech.backend'])), cancel, deadline,
-                    lambda *_: None)
-
-    licenses = target/'Model-Licenses'
-    licenses.mkdir()
-    shutil.copy2(model/'README.md', licenses/'Whisper-small.en-model-card.md')
-    shutil.copy2(model/'UPSTREAM-OPENAI-LICENSE.txt', licenses/'OpenAI-Whisper-MIT.txt')
-    shutil.copy2(notices/'qt-source-notices/qtscxml/LICENSES/Apache-2.0.txt',
-                 licenses/'Apache-2.0.txt')
-    return roots
+    runtime = target/'runtime'
+    copy_manifest_resource(specs['speech.runtime'], runtime, cancel, deadline, lambda *_: None)
+    for directory in (runtime, *runtime.rglob('*')):
+        if not directory.is_symlink() and directory.is_dir():
+            directory.chmod(0o755)
+    verify_resource(dict(specs['speech.backend'], root=str(runtime)), cancel, deadline, lambda *_: None)
+    return {'speech.runtime': runtime, 'speech.backend': runtime}
 
 
 def main():
@@ -103,8 +85,6 @@ def main():
     parser.add_argument('--translation-models-root',type=Path)
     parser.add_argument('--mac-local-delivery-notices', type=Path,
                         help='Build the Mac local delivery layout using notices from the frozen assembly')
-    parser.add_argument('--bundled-whisper-model', type=Path,
-                        help='Directory with the verified Whisper small.en weights and upstream notices')
     parser.add_argument('--module-cache-path',type=Path,help='Explicit owned, rebuildable compile cache; never an old evidence cache')
     parser.add_argument("--pdf-library", type=Path, help="Pinned wheel unpacked under a NEW artifacts directory on Windows")
     args = parser.parse_args()
@@ -139,10 +119,6 @@ def main():
     product_version = PRODUCT_VERSION if local_delivery else '0.2.11'
     if local_delivery and (sys.platform != 'darwin' or stage != 'T09B'):
         parser.error('The local delivery layout requires the T09B Mac runtime.')
-    if local_delivery and not args.bundled_whisper_model:
-        parser.error('The Mac delivery requires a verified --bundled-whisper-model directory.')
-    if args.bundled_whisper_model and not local_delivery:
-        parser.error('The bundled speech payload belongs to the Mac local delivery layout.')
     if stage not in ('T01','T02','T03A','T11D','T06A','T04','T05','T09A','T07','T08','T06B','T09B'):
         parser.error('Unknown preview stage; no fallback to an old data root.')
     preview_data = project / "artifacts" / {"T03A": "t03a-20261022", "T02": "t02-20261021",
@@ -213,7 +189,7 @@ def main():
         # Windows identity is independent of the historical Mac build sequence.
         build_id = "windows-x64-" + stage.lower() + "-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         package = output / "B01"
-    shutil.copytree(source, package, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    shutil.copytree(source, package, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "AppIcon.icns"))
     shutil.copytree(project / "shared", package / "shared", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     if stage=='T09B':
         runtime = app/'Contents/Resources/Runtime/gui'
@@ -225,8 +201,7 @@ def main():
         else:
             shutil.copy2(args.install_catalog,package/'install-catalog.json')
         reference = json.loads(args.resource_reference.read_bytes())
-        speech_roots = assemble_whisper(reference, args.bundled_whisper_model.resolve(),
-                                        args.mac_local_delivery_notices, runtime.parent/'whisper') if local_delivery else {}
+        speech_roots = assemble_whisper_runtime(reference, runtime.parent/'whisper') if local_delivery else {}
         manifests = package/'resource-manifests'
         manifests.mkdir()
         package_paths = {}
@@ -281,6 +256,9 @@ def main():
             if name in ('gui.runtime','speech.bridge','mac.frameworks') or name in speech_roots:
                 package_paths[name]=dict(root=str(Path(__import__('os').path.relpath(root,package))),
                                          manifest=str(Path(__import__('os').path.relpath(target,package))))
+            elif local_delivery and name in ('speech.model', 'speech.assets'):
+                spec['root'] = '/var/empty'
+                package_paths[name] = dict(manifest=str(target.relative_to(package)))
             else:
                 package_paths[name]=dict(root=str(root),manifest=str(target.relative_to(package)))
         (package/'resource-reference-template.json').write_text(json.dumps(reference,ensure_ascii=False))
@@ -422,8 +400,8 @@ def main():
             identity.update(delivery_layout=LOCAL_DELIVERY, preview_data_root=None, preview_task_root=None,
                             preview_preferences_path=None, dictionary_config=None, resource_config=None,
                             resource_reference=None, resource_evidence_root=None,
-                            install_catalog='install-catalog.json', engines='external-ollama-bundled-whisper',
-                            bundled_whisper=True, product_prototype='r13.1')
+                            install_catalog='install-catalog.json', engines='external-ollama-external-speech-models',
+                            external_speech_presets=True, product_prototype='r13.1')
         else:
             initialize_package_resources(package,identity,preview_data)
     (package / "build-identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -439,8 +417,9 @@ def main():
             "NSDocumentsFolderUsageDescription": "此开发预览需要读取文稿目录中的项目运行环境，并保存独立的测试任务。",
             "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication"}
         if local_delivery:
+            shutil.copy2(source / "native/AppIcon.icns", app / "Contents/Resources/AppIcon.icns")
             info.update(CFBundleIdentifier='local.kevin.translator.mac', CFBundleName='本地翻译器',
-                        CFBundleDisplayName='本地翻译器',
+                        CFBundleDisplayName='本地翻译器', CFBundleIconFile='AppIcon.icns',
                         NSDocumentsFolderUsageDescription='读取你选中的文稿以及已配置的本地语音资源。')
         if stage in ('T08','T06B','T09B'):
             info['NSMicrophoneUsageDescription'] = '在你主动开始麦克风同传后，接收选定输入设备并保存本地录音。'

@@ -1,8 +1,8 @@
 # 本地翻译器
 
-本地翻译器是一款 macOS 应用，用于翻译文字、PDF、TXT 和图片，也可转写录音或在录音时显示双语字幕。文字识别使用 Apple Vision，语音识别使用 Whisper，翻译连接本机 Ollama。
+本地翻译器是一款 macOS 应用，用于翻译文字、PDF、TXT 和图片，也可转写录音或在录音时显示双语字幕。文字识别使用 Apple Vision，语音页提供 Whisper 和 Qwen3-ASR 预设，翻译连接本机 Ollama。
 
-当前交付版本为 **0.2.13 build143**，适用于运行 macOS 26.0 或更新版本的 Apple Silicon Mac。GitHub 仓库提供源码和测试，App 与 ZIP 安装包按本机交付。Windows 适配暂缓。
+当前本机交付版本为 **0.2.14 build146**，适用于运行 macOS 26.0 或更新版本的 Apple Silicon Mac。本版加入新的 Finder 和 Dock 图标。GitHub 仓库提供源码，本机安装包在打包后生成。[语音资源导入说明](docs/Mac语音资源导入.md)
 
 ## 功能
 
@@ -24,14 +24,14 @@
 
 ## 语音资源
 
-App 随包提供 WhisperLiveKit、Whisper small.en 英语模型、分词器、梅尔滤波器和语音活动检测（VAD）资源。要识别中文等其他语言，可在「偏好设置 → 语音资源」导入兼容的 MLX Whisper large-v3-turbo，再到同传或转写页选择它。
+App 随包提供固定 WhisperLiveKit 运行组件。打开「偏好设置 → 语音资源」可以为 Whisper small.en、Whisper large-v3-turbo、Qwen3-ASR 0.6B 和 Qwen3-ASR 1.7B 分别导入本地权重、分词和辅助文件。Qwen 使用另行导入的固定版 Metal 依赖目录。
 
-「语音资源」页可检查环境、导入受支持的模型目录、分词文件、辅助资源或运行组件，也可恢复内置资源。模型格式和固定版本见清单。 [small.en 清单](shared/translator_core/whisper-small.en.model.json) · [large-v3-turbo 清单](shared/translator_core/whisper-large-v3-turbo.model.json)
+文件齐备后，在对应预设执行「本机验证」。通过的模式显示「可用」。small.en 识别英语，large-v3-turbo 支持多语。Qwen 本版验证入口适用于英语同传和录音转写。四套权重与模型配套文件使用本地导入副本。 [small.en 清单](shared/translator_core/whisper-small.en.model.json) · [large-v3-turbo 清单](shared/translator_core/whisper-large-v3-turbo.model.json) · [0.6B 清单](shared/translator_core/qwen3-asr-0.6b.model.json) · [1.7B 清单](shared/translator_core/qwen3-asr-1.7b.model.json)
 
-build143 已用合成音频验证英语转写、多语模型导入后的中文转写、同传暂停与继续。实体麦克风与电脑声音的权限和实际采集仍待本版复核。
+两款 Whisper 的固定权重已通过英语同传、转写和精修检查。两款 Qwen 的导入与连续 PCM 路径已通过受控夹具检查，正式权重与独立运行包需要分别在本机验证。
 
 ## 开发与构建
 
 桌面界面与打包入口位于 `prototype/b01`，翻译、任务存储和资源校验位于 `shared/translator_core`，macOS 系统适配位于 `shared/platform/macos`。 [桌面源码](prototype/b01/translator_preview) · [共享逻辑](shared/translator_core) · [macOS 适配](shared/platform/macos)
 
-Mac 打包使用 Python 3.12.14、Qt/PySide6 6.10.2 和 Apple 命令行开发工具，依赖已校验的运行环境、语音模型、离线词典及许可材料。 [打包脚本](prototype/b01/build_preview.py) · [依赖锁定](prototype/b01/dependencies.lock.json) · [随包资源与许可](prototype/b01/mac-local-notices.md)
+Mac 打包使用 Python 3.12.14、Qt/PySide6 6.10.2 和 Apple 命令行开发工具，输入为已校验的运行组件、语音预设清单、离线词典及许可材料。 [打包脚本](prototype/b01/build_preview.py) · [依赖锁定](prototype/b01/dependencies.lock.json) · [随包资源与许可](prototype/b01/mac-local-notices.md)

@@ -19,6 +19,7 @@ REFERENCE = "resource-reference-set-v1"
 SELECTION = "resource-selection-v1"
 CHECK = "resource-check-v1"
 BINDING = "resource-binding-v1"
+SPEECH_BINDING = "speech-preset-binding-v1"
 MANIFEST_LIMIT = 8 * 1024 * 1024
 SUMMARY_LIMIT = 512 * 1024
 FILE_LIMIT = 8 * 1024**3
@@ -61,6 +62,17 @@ def encoded(value):
 
 def digest(value):
     return hashlib.sha256(encoded(value)).hexdigest()
+
+
+def manifest_hasher(expected):
+    if "git_blob" in expected:
+        # Small files in pinned Hub revisions use Git's blob identity.
+        return hashlib.sha1(f"blob {expected['size']}\0".encode("ascii"), usedforsecurity=False)
+    return hashlib.sha256()
+
+
+def manifest_matches(expected, hashed):
+    return hashed.hexdigest() == expected.get("sha256", expected.get("git_blob"))
 
 
 class ResourceError(CoreError):
@@ -231,8 +243,13 @@ def manifest_entries(spec):
             bounded_string(item["link"], 4096)
             if item["link"].startswith("/") or "\\" in item["link"]:
                 raise ResourceError("unsafe_path", "组件链接不可指向绝对或外部路径。")
-        elif set(item) == {"size", "sha256"}:
-            hash_value(item["sha256"])
+        elif set(item) == {"size", "sha256"} or fmt == "model-v0" and set(item) == {"size", "git_blob"}:
+            if "sha256" in item:
+                hash_value(item["sha256"])
+            else:
+                blob = item["git_blob"]
+                if not isinstance(blob, str) or len(blob) != 40 or any(c not in "0123456789abcdef" for c in blob):
+                    raise ResourceError("resource_incompatible", "模型 Git 文件校验值不合法。")
             if type(item["size"]) is not int or not 0 <= item["size"] <= FILE_LIMIT:
                 raise ResourceError("resource_limit", "资源文件大小超限。")
             total += item["size"]
@@ -315,7 +332,7 @@ def verify_resource(spec, cancel, deadline, progress):
             if not stat.S_ISREG(before[2]) or before[3] != expected["size"]:
                 raise ResourceError("resource_corrupt", "资源文件类型或大小不匹配：" + name)
             file_deadline = min(deadline, time.monotonic() + FILE_SECONDS)
-            hashed = hashlib.sha256(); count = 0
+            hashed = manifest_hasher(expected); count = 0
             while True:
                 stop_check(cancel, file_deadline)
                 block = stream.read(CHUNK)
@@ -325,11 +342,11 @@ def verify_resource(spec, cancel, deadline, progress):
                 if actual_bytes > SET_LIMIT or count > expected["size"]:
                     raise ResourceError("resource_limit", "资源读取超过已声明边界。")
                 progress(spec["resource_id"], index, len(files), actual_bytes)
-            if (count != expected["size"] or hashed.hexdigest() != expected["sha256"]):
+            if count != expected["size"] or not manifest_matches(expected, hashed):
                 raise ResourceError("resource_corrupt", "资源文件校验不匹配：" + name)
             if before != stat_token(os.fstat(stream.fileno())) or before != token(path):
                 raise ResourceError("resource_changed", "核验期间资源文件发生变化：" + name)
-            records[name] = dict(token=before, sha256=expected["sha256"])
+            records[name] = dict(token=before, **{k: v for k, v in expected.items() if k != "size"})
     result = dict(identity=content_identity(spec), state="files_verified", files=len(files),
                   bytes=actual_bytes, manifest_token=manifest_token, records=records,
                   root_token=token(root), directory_tokens=directories, model_load="not_tested", inference="not_tested")
@@ -667,11 +684,31 @@ class ResourceManager:
 
 def parse_binding(raw):
     value = json_value(raw) if isinstance(raw, (str, bytes)) else deepcopy(raw)
-    if (not isinstance(value, dict) or set(value) != {"version", "capability", "execution", "resources",
-            "prerequisite_only", "model_load", "inference", "check", "checked_at"} or value["version"] != BINDING or
-            value["capability"] not in REQUIRED or
-            value["prerequisite_only"] is not True or value["model_load"] != "not_tested" or value["inference"] != "not_tested" or
-            not isinstance(value["resources"], dict) or set(value["resources"]) != set(REQUIRED[value["capability"]])):
+    keys = {"version", "capability", "execution", "resources", "prerequisite_only", "model_load",
+            "inference", "check", "checked_at"}
+    speech_preset = isinstance(value, dict) and value.get("version") == SPEECH_BINDING
+    if (not isinstance(value, dict) or set(value) != (keys | {"speech"} if speech_preset else keys)
+            or value["version"] not in (BINDING, SPEECH_BINDING) or value["capability"] not in REQUIRED
+            or not isinstance(value["resources"], dict)):
+        raise ResourceError("resource_incompatible", "任务资源绑定格式不受支持。")
+    required = REQUIRED[value["capability"]]
+    if speech_preset:
+        from .speech_presets import QWEN_BACKEND, QWEN_RUNTIME, validate_speech_metadata
+        if (not isinstance(value["speech"], dict) or value["prerequisite_only"] is not False or
+                value["model_load"] != "verified" or value["inference"] != "verified"):
+            raise ResourceError("resource_incompatible", "语音预设绑定缺少能力验证。")
+        validate_speech_metadata(value["speech"], value["capability"], value["resources"])
+        if value["speech"]["backend"] == QWEN_BACKEND:
+            required = ("speech.runtime", "speech.bridge", "speech.model", "speech.backend", "speech.qwen-runtime")
+            valid_execution = value["execution"] == dict(language="en", backend=QWEN_BACKEND, runtime=QWEN_RUNTIME)
+        else:
+            valid_execution = valid_speech_execution(value["capability"], value["execution"], value["resources"])
+    else:
+        if (value["prerequisite_only"] is not True or value["model_load"] != "not_tested" or
+                value["inference"] != "not_tested"):
+            raise ResourceError("resource_incompatible", "既有能力绑定格式不受支持。")
+        valid_execution = valid_speech_execution(value["capability"], value["execution"], value["resources"])
+    if not valid_execution or set(value["resources"]) != set(required):
         raise ResourceError("resource_incompatible", "任务资源绑定格式不受支持。")
     for item in value["resources"].values():
         if not isinstance(item, dict) or set(item) != {"identity", "root", "manifest"}:
@@ -685,8 +722,6 @@ def parse_binding(raw):
                 '..' in Path(manifest['path']).parts or not Path(item['root']).is_absolute() or '..' in Path(item['root']).parts):
             raise ResourceError("resource_incompatible", "任务清单身份或位置无效。")
         hash_value(manifest['sha256'])
-    if not valid_speech_execution(value['capability'],value['execution'],value['resources']):
-        raise ResourceError("resource_incompatible", "语音执行设备或语言不属于当前模型配置。")
     if type(value['checked_at']) not in (int,float) or not math.isfinite(value['checked_at']):
         raise ResourceError('resource_incompatible','任务绑定检查时间无效。')
     receipt=value['check']
@@ -747,6 +782,7 @@ def valid_receipt(value, root):
 def compare_binding(saved, current):
     left, right = parse_binding(saved), parse_binding(current)
     if (left["capability"] != right["capability"] or left["execution"] != right["execution"] or
+            (left.get("speech") and right.get("speech") and left["speech"] != right["speech"]) or
             {k:v["identity"] for k,v in left["resources"].items()} !=
             {k:v["identity"] for k,v in right["resources"].items()} or
             {k:{a:b for a,b in v['manifest'].items() if a!='path'} for k,v in left['resources'].items()} !=

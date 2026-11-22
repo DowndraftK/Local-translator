@@ -1,10 +1,13 @@
 """A first-run resource overview for the Mac installation."""
 from PySide6.QtCore import QStandardPaths, QTimer, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QFileDialog, QLineEdit, QProgressBar, QWidget
+from PySide6.QtWidgets import QFileDialog, QLineEdit, QMenu, QProgressBar, QWidget
 
 from translator_core.local_environment import OLLAMA_DOWNLOAD, OLLAMA_MODEL_DOWNLOADS
 from translator_core.resource_macos import DEFAULT_WHISPER
+from translator_core.languages import LANGUAGES
+from translator_core.resources import manifest_entries
+from translator_core.speech_presets import MODES, PRESETS, QWEN_BACKEND, QWEN_PACKAGES, QWEN_RUNTIME, WHISPER_RUNTIME, model_spec
 
 from .components import Button, frame, hbox, label, vbox
 from .dictionary_page import show_information
@@ -15,10 +18,11 @@ SOURCES = {'bundled':'内置', 'imported':'已导入', 'external':'外部资源'
 
 
 class EnvironmentPage(QWidget):
-    def __init__(self, client, can_configure):
+    def __init__(self, client, can_configure, *, external_speech=False):
         super().__init__()
         self.client = client
         self.can_configure = can_configure
+        self.external_speech = external_speech
         self.report = None
         self.scan_request = self.action_request = None
         self.scan_timer = QTimer(self)
@@ -66,6 +70,49 @@ class EnvironmentPage(QWidget):
         model_actions.addStretch()
         ollama_details.addLayout(model_actions)
 
+        if external_speech:
+            self.add_speech_presets(speech)
+        else:
+            self.add_legacy_speech(speech)
+
+        dictionary, self.dictionary_status, actions = self.card(layout, '离线词典')
+        self.choose_dict = Button('导入词典', None, 'secondary', self.select_dictionary)
+        self.choose_dict.setToolTip('校验并复制词典和索引到应用数据目录')
+        self.reset_dict = Button('恢复内置词典', None, 'quiet', lambda: self.operate('environment.dictionary', path=None))
+        self.dictionary_license = Button('来源与许可', None, 'quiet', self.show_dictionary_license)
+        actions.addWidget(self.choose_dict)
+        actions.addStretch()
+        dictionary_details = self.details(dictionary, '版本与来源')
+        row = hbox(spacing=8)
+        row.addWidget(self.reset_dict)
+        row.addWidget(self.dictionary_license)
+        row.addStretch()
+        dictionary_details.addLayout(row)
+
+        _, vision, _ = self.card(layout, 'Apple Vision')
+        vision.setText('macOS 系统 OCR，用于从 PDF 和图片提取原文。')
+
+        self.feedback = QWidget()
+        feedback = vbox(self.feedback, (24,6,24,8), 4)
+        row = hbox(spacing=10)
+        self.progress = QProgressBar()
+        self.progress.setAccessibleName('资源操作进度')
+        self.progress.setRange(0, 100)
+        self.cancel = Button('取消操作', None, 'quiet', client.cancel)
+        row.addWidget(self.progress, 1)
+        row.addWidget(self.cancel)
+        feedback.addLayout(row)
+        self.notice = label('', 'tiny', True)
+        self.notice.setAccessibleName('资源操作结果')
+        feedback.addWidget(self.notice)
+        client.event.connect(self.on_event)
+        client.changed.connect(self.worker_changed)
+        client.dictionary.changed.connect(self.render)
+        client.preferences.changed.connect(self.render)
+        client.resources.changed.connect(self.render)
+        self.render()
+
+    def add_legacy_speech(self, speech):
         overview = frame('feature')
         summary = vbox(overview, (16,14,16,14), 6)
         row = hbox(spacing=8)
@@ -105,42 +152,111 @@ class EnvironmentPage(QWidget):
         row.addStretch()
         runtime_details.addLayout(row)
 
-        dictionary, self.dictionary_status, actions = self.card(layout, '离线词典')
-        self.choose_dict = Button('导入词典', None, 'secondary', self.select_dictionary)
-        self.choose_dict.setToolTip('校验并复制词典和索引到应用数据目录')
-        self.reset_dict = Button('恢复内置词典', None, 'quiet', lambda: self.operate('environment.dictionary', path=None))
-        self.dictionary_license = Button('来源与许可', None, 'quiet', self.show_dictionary_license)
-        actions.addWidget(self.choose_dict)
-        actions.addStretch()
-        dictionary_details = self.details(dictionary, '版本与来源')
-        row = hbox(spacing=8)
-        row.addWidget(self.reset_dict)
-        row.addWidget(self.dictionary_license)
-        row.addStretch()
-        dictionary_details.addLayout(row)
+    def add_speech_presets(self, speech):
+        self.preset_cards = {}
+        for variant, preset in PRESETS.items():
+            box, status, buttons = self.card(speech, preset['name'])
+            model = model_spec(variant, '/var/empty')
+            revision = model['version']
+            languages = '、'.join(LANGUAGES[code][0] for code in preset['languages'])
+            description = label(f"{preset['precision']} · 原文语言 {languages}", 'tiny', True)
+            box.addWidget(description)
+            supplementary = Button('补齐资源', None, 'quiet')
+            menu = QMenu(supplementary)
+            menu.addAction('选取分词或辅助文件…', lambda checked=False, key=variant: self.choose_preset(key, 'assets', single=True))
+            menu.addAction('选取辅助资源目录…', lambda checked=False, key=variant: self.choose_preset(key, 'assets'))
+            supplementary.setMenu(menu)
+            import_model = Button('导入模型目录…', None, 'secondary',
+                                  lambda checked=False, key=variant: self.choose_preset(key, 'model'))
+            verify = Button('本机验证', None, 'quiet',
+                             lambda checked=False, key=variant: self.operate('environment.speech_verify', item=key))
+            for widget in (import_model, supplementary, verify):
+                buttons.addWidget(widget)
+            buttons.addStretch()
+            details = self.details(box, '文件与来源', buttons)
+            files = label('', 'tiny', True)
+            files.setAccessibleName(preset['name']+'所需文件')
+            details.addWidget(files)
+            required = '、'.join(manifest_entries(model)[0])
+            details.addWidget(label('模型目录需要 '+required, 'tiny', True))
+            details.addWidget(label(f"固定版本 {revision}", 'tiny', True))
+            origin = model['origin']+'/tree/'+revision
+            details.addWidget(Button('打开模型来源', None, 'quiet',
+                                     lambda checked=False, link=origin: self.open_download(link)))
+            note = ('运行组件用外置 Qwen 运行包。此预设接收官方 BF16，社区 MLX 8-bit 待单独验证。'
+                    if preset['backend'] == QWEN_BACKEND else
+                    '分词器、梅尔滤波器和 VAD 可按原目录结构导入，也可以逐个补齐。')
+            details.addWidget(label(note, 'tiny', True))
+            self.preset_cards[variant] = dict(status=status, files=files, verify=verify,
+                                             imports=(import_model, supplementary))
+        box, self.whisper_runtime_status, _ = self.card(speech, 'Whisper 运行组件')
+        self.whisper_runtime_status.setText(WHISPER_RUNTIME+' · 随 App 安装')
+        box, self.qwen_runtime_status, buttons = self.card(speech, 'Qwen 独立运行包')
+        self.qwen_runtime_import = Button('导入运行目录…', None, 'secondary',
+                                          lambda: self.choose_preset(None, 'runtime'))
+        buttons.addWidget(self.qwen_runtime_import)
+        buttons.addStretch()
+        box.addWidget(label(QWEN_RUNTIME+' · '+' · '.join(f'{name} {version}' for name,version in QWEN_PACKAGES.items()),
+                            'tiny', True))
 
-        _, vision, _ = self.card(layout, 'Apple Vision')
-        vision.setText('macOS 系统 OCR，用于从 PDF 和图片提取原文。')
+    def choose_preset(self, item, part, *, single=False):
+        if self.client.state != 'ready':
+            return
+        name = PRESETS[item]['name'] if item else QWEN_RUNTIME
+        title = {'model': '导入模型目录', 'assets': '补齐分词器或辅助资源', 'runtime': '导入 Qwen 运行包'}[part]
+        start = QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
+        if single:
+            path, _ = QFileDialog.getOpenFileName(self.speech, f'{name} · {title}', start)
+        else:
+            path = QFileDialog.getExistingDirectory(self.speech, f'{name} · {title}', start)
+        if path:
+            self.operate('environment.speech_import', item=item, part=part, path=path)
 
-        self.feedback = QWidget()
-        feedback = vbox(self.feedback, (24,6,24,8), 4)
-        row = hbox(spacing=10)
-        self.progress = QProgressBar()
-        self.progress.setAccessibleName('资源操作进度')
-        self.progress.setRange(0, 100)
-        self.cancel = Button('取消操作', None, 'quiet', client.cancel)
-        row.addWidget(self.progress, 1)
-        row.addWidget(self.cancel)
-        feedback.addLayout(row)
-        self.notice = label('', 'tiny', True)
-        self.notice.setAccessibleName('资源操作结果')
-        feedback.addWidget(self.notice)
-        client.event.connect(self.on_event)
-        client.changed.connect(self.worker_changed)
-        client.dictionary.changed.connect(self.render)
-        client.preferences.changed.connect(self.render)
-        client.resources.changed.connect(self.render)
-        self.render()
+    def render_speech_presets(self, speech, pending, can_change):
+        rows = speech.get('rows', {})
+        for key, card in self.preset_cards.items():
+            state = rows.get(key, {})
+            missing, invalid = [], []
+            for part in ('model', 'assets'):
+                missing.extend(state.get('missing_'+part, []))
+                invalid.extend(state.get('invalid_'+part, []))
+            modes = state.get('modes', {})
+            card['status'].setText(' · '.join(f'{title} {modes.get(mode, pending)}' for mode, title in MODES.items()))
+            detail = []
+            if state.get('error'):
+                detail.append(state['error'])
+            if missing:
+                detail.append('缺少 '+ '、'.join(missing))
+            if invalid:
+                detail.append('大小或类型不符 '+ '、'.join(invalid))
+            if state.get('runtime_missing'):
+                detail.append('请在本页导入 Qwen 独立运行包。' if PRESETS[key]['backend'] == QWEN_BACKEND
+                              else 'Whisper 运行组件缺失，请核对 App 安装。')
+            if missing or invalid:
+                if state.get('missing_model') or state.get('invalid_model'):
+                    detail.append('权重、配置和分片索引使用「导入模型目录」。分词和预处理文件可通过「补齐资源」导入。')
+                else:
+                    detail.append('使用本条的「补齐资源」导入。')
+            if state.get('details'):
+                detail.extend(f"{MODES[mode]} · {message}" for mode, message in state['details'].items() if message)
+            if speech.get('warning'):
+                detail.append(speech['warning'])
+            card['files'].setText('\n'.join(detail) or '资源齐备。')
+            card['files'].setToolTip(state.get('model', ''))
+            card['files'].setVisible(bool(detail))
+            if missing or invalid or state.get('runtime_missing'):
+                count = len(missing)+len(invalid)
+                short = f'{count} 项文件待补齐' if count else ''
+                if state.get('runtime_missing'):
+                    short += (' · ' if short else '')+'运行组件待导入'
+                if short:
+                    card['status'].setText(card['status'].text()+'   |   '+short)
+            for button in card['imports']:
+                button.setEnabled(can_change)
+            card['verify'].setEnabled(bool(state and can_change and not (missing or invalid or state.get('runtime_missing') or state.get('error'))))
+        qwen = rows.get('qwen3-asr-0.6b', {})
+        self.qwen_runtime_status.setText(qwen.get('error') or ('待导入' if qwen.get('runtime_missing') else '已导入 · 按模型运行本机验证') if qwen else pending)
+        self.qwen_runtime_import.setEnabled(can_change)
 
     def card(self, layout, title):
         card = frame('editor_card')
@@ -158,13 +274,16 @@ class EnvironmentPage(QWidget):
         if not QDesktopServices.openUrl(QUrl(url)):
             self.notice.setText('无法打开浏览器，请查看资源说明。')
 
-    def details(self, layout, title):
+    def details(self, layout, title, buttons=None):
         button = Button(title, 'down', 'quiet')
         button.setCheckable(True)
         panel = QWidget()
         panel.hide()
         button.toggled.connect(panel.setVisible)
-        layout.addWidget(button, alignment=Qt.AlignLeft)
+        if buttons is None:
+            layout.addWidget(button, alignment=Qt.AlignLeft)
+        else:
+            buttons.insertWidget(buttons.count()-1, button)
         layout.addWidget(panel)
         return vbox(panel, spacing=6)
 
@@ -303,7 +422,9 @@ class EnvironmentPage(QWidget):
                 self.reload_after_scan = False
                 QTimer.singleShot(0, self.refresh)
         if identity == self.action_request:
-            if kind == 'environment.progress':
+            if kind == 'environment.progress' and 'message' in event:
+                self.notice.setText(event['message'])
+            elif kind == 'environment.progress':
                 done, total = event['received'], event['total']
                 self.progress.setRange(0, 100)
                 self.progress.setValue(min(100, int(100*done/total)) if total else 0)
@@ -315,7 +436,7 @@ class EnvironmentPage(QWidget):
                 self.action_request = None
                 success = '已恢复内置语音资源。' if self.action_kind=='environment.restore_speech' else '资源已校验并保存。'
                 self.action_kind = None
-                self.notice.setText(success if status == 'completed' else
+                self.notice.setText((detail.get('message') or success) if status == 'completed' else
                                     '操作已取消。' if status in ('cancelled', 'lease_expired') else
                                     error.get('message') or detail.get('error') or '操作失败，请重试。')
                 QTimer.singleShot(0, self.refresh)
@@ -351,8 +472,9 @@ class EnvironmentPage(QWidget):
         self.cancel.setEnabled(self.client.state == 'running')
         self.choose_dict.setEnabled(can_change)
         self.reset_dict.setEnabled(can_change)
-        for action in (self.choose_model,self.choose_tokenizer,self.choose_assets,self.choose_runtime,self.get_runtime):
-            action.setEnabled(can_change)
+        if not self.external_speech:
+            for action in (self.choose_model,self.choose_tokenizer,self.choose_assets,self.choose_runtime,self.get_runtime):
+                action.setEnabled(can_change)
         self.save_endpoint.setEnabled(can_change and bool(self.client.preferences.description))
         report = self.report or {}
         ollama, speech = report.get('ollama', {}), report.get('whisper', {})
@@ -384,7 +506,10 @@ class EnvironmentPage(QWidget):
             self.ollama_status.setText('正在检测 Ollama 和本地翻译模型…' if self.scan_request else pending_status)
             self.model_list.clear()
             self.get_ollama.hide()
-        self.render_speech(speech, pending_status, can_change, checking)
+        if self.external_speech:
+            self.render_speech_presets(report.get('speech_presets', {}), pending_status, can_change)
+        else:
+            self.render_speech(speech, pending_status, can_change, checking)
         state = report.get('dictionary', {})
         self.reset_dict.setVisible(state.get('mode') == 'custom' or bool(state.get('warning')))
         descriptors = (self.client.dictionary.session.resources or {}).get('resources', [])

@@ -148,16 +148,17 @@ class AudioTasks(ImageTasks):
                 raise CoreError('规范音频样本或格式不匹配。', 'audio_incomplete')
         return path
 
-    def _binding(self, capability):
+    def _binding(self, capability, verified=None):
         if not self.resources: raise CoreError('请在偏好设置选择、保存并主动检查资源。', 'audio_binding')
         a = self._audio()
         execution = None
         if capability.startswith('speech.') and a.get('asrModel'):
             language = speech_language(a['asrModel'],self.task['configuration']['direction'])
             execution = dict(EXECUTION, language=language)
-        binding = json.loads(self.resources.make_binding(capability,execution))
+        binding = verified if verified is not None else json.loads(self.resources.make_binding(capability,execution))
         saved = a['bindings'].get(capability)
-        if saved and compare_binding(saved, binding) != 'identical':
+        allowed = ('identical', 'relocated') if verified is not None else ('identical',)
+        if saved and compare_binding(saved, binding) not in allowed:
             raise CoreError('资源位置或内容已改变，请明确另建任务并保留旧结果。', 'audio_binding')
         return binding
 
@@ -168,7 +169,7 @@ class AudioTasks(ImageTasks):
             raise CoreError('请先恢复此记录。', 'task_trashed')
         self.store.verify_asset(self.task, self.store.directory(self.task['id']))
 
-    def recognize_audio(self, generation, cancel, changed, refine=False):
+    def recognize_audio(self, generation, cancel, changed, refine=False, *, verified=None):
         with self.lock:
             self._writable(); a = self._audio()
             if a.get('recording') and not a['pcm']:
@@ -180,8 +181,9 @@ class AudioTasks(ImageTasks):
             previous = a['executions'][-1] if a['executions'] else None
             if not refine and previous and a['checkpoint']['sample'] and previous['adapter'] != self.audio_adapter.identity:
                 raise CoreError('检查点的音频适配代码身份已改变，请保留结果并另建任务。', 'audio_binding')
-            binding = self._binding(capability)
-            decode_binding = self._binding('audio.decode') if not a['pcm'] else None
+            verified = verified or {}
+            binding = self._binding(capability, verified.get(capability))
+            decode_binding = self._binding('audio.decode', verified.get('audio.decode')) if not a['pcm'] else None
             if cancel.is_set(): raise Cancelled()
             if refine:
                 self.pcm_path()
@@ -190,6 +192,8 @@ class AudioTasks(ImageTasks):
                     self._fork_refinement()
                     a = self._audio()
             if len(a['executions']) >= 64: raise CoreError('执行记录已达64次上限，请另建任务。', 'audio_limit')
+            if binding.get('speech') and not a.get('asrModel'):
+                a['asrModel'] = binding['speech']['model']
             self.active = (generation, cancel); a['bindings'][capability] = binding
             if decode_binding: a['bindings']['audio.decode'] = decode_binding
             execution = dict(id=generation, stage='refine' if refine else 'asr', adapter=self.audio_adapter.identity,

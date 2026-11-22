@@ -83,8 +83,9 @@ def validate_audio_task(task):
     if not isinstance(bindings, dict): raise CoreError('音频绑定字段无效。', 'audio_binding')
     for capability, binding in bindings.items():
         parsed = parse_binding(binding)
-        if parsed['capability'] != capability or (spoken and capability.startswith('speech.') and
-                parsed['execution']['language'] != spoken):
+        if (parsed['capability'] != capability or (spoken and capability.startswith('speech.') and
+                parsed['execution']['language'] != spoken) or
+                parsed.get('speech') and parsed['speech']['model'] != variant):
             raise CoreError('音频能力绑定不匹配。', 'audio_binding')
     if not isinstance(a.get('executions'), list) or len(a['executions']) > 64:
         raise CoreError('音频执行记录超过容量。', 'audio_limit')

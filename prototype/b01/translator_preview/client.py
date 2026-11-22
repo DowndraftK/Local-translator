@@ -61,6 +61,7 @@ class WorkerClient(QObject):
         self.current_task = None
         self.model_catalog = []
         self.speech_catalog = None
+        self.speech_choices = {}
         self.can_change_task = lambda: True
         self.transfer = None
         self.snapshot_context = None
@@ -115,6 +116,7 @@ class WorkerClient(QObject):
         self.snapshot_context = None
         self.set_model_catalog([])
         self.speech_catalog = None
+        self.speech_choices = {}
         self.speech_catalog_changed.emit()
         process = QProcess(self); self.process = process
         environment = QProcessEnvironment()
@@ -191,6 +193,12 @@ class WorkerClient(QObject):
         kind, request_kind = event["type"], self.requests.get(event["request_id"])
         if request_kind is None:
             raise ProtocolError("unknown_request_result")
+        if request_kind == 'environment.speech_choice':
+            self.requests.pop(event['request_id'], None)
+            if kind == 'environment.choice':
+                self.speech_choices = event['choices']
+            self.event.emit(event)
+            return
         if request_kind.startswith('environment.') and kind in ('environment.description', 'environment.error'):
             self.requests.pop(event['request_id'], None)
             if request_kind != 'environment.scan' and kind == 'environment.error':
@@ -202,7 +210,10 @@ class WorkerClient(QObject):
                 services = event['description']['ollama']['external']
                 self.set_model_catalog(list(dict.fromkeys(
                     name for service in services for name in service.get('catalog', ()))))
-                self.speech_catalog = event['description']['whisper'].get('variants')
+                speech = event['description'].get('speech_presets')
+                self.speech_catalog = speech['rows'] if speech else event['description']['whisper'].get('variants')
+                if speech:
+                    self.speech_choices = speech['choices']
                 self.speech_catalog_changed.emit()
             self.event.emit(event)
             return

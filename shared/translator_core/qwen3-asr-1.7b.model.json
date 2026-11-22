@@ -1,0 +1,16 @@
+{
+  "repo": "Qwen/Qwen3-ASR-1.7B",
+  "revision": "7278e1e70fe206f11671096ffdd38061171dd6e5",
+  "files": {
+    "config.json": {"size": 6194, "git_blob": "2bc16c9d4ca08963715cfb94d879799b9adbd0e9"},
+    "model-00001-of-00002.safetensors": {"size": 4220320824, "sha256": "a4cd1f1a04d90b757dc7f7dd26254e69a013b19e80efe590a83c6a3bde8608d6"},
+    "model-00002-of-00002.safetensors": {"size": 478200688, "sha256": "6e0b9d9e09e2e0238e7ef3cc8a484ab387e91b90f1900bedf88bc92d7929ccfc"},
+    "model.safetensors.index.json": {"size": 64821, "git_blob": "1048a4eb4f21fef9aea06d8568a784b2b5595689"},
+    "chat_template.json": {"size": 1161, "git_blob": "c44736493efd71ec96218cc626904698cdb13235"},
+    "generation_config.json": {"size": 142, "git_blob": "7382a4d347c0a865b76bb1b8277f66a5ac312854"},
+    "merges.txt": {"size": 1671853, "git_blob": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7"},
+    "preprocessor_config.json": {"size": 330, "git_blob": "8f7f07346466d5d494ec0d4969d1c3d0190eed72"},
+    "tokenizer_config.json": {"size": 12487, "git_blob": "b93109843922a40c6654c5449d3bf95372267c66"},
+    "vocab.json": {"size": 2776833, "git_blob": "4783fe10ac3adce15ac8f358ef5462739852c569"}
+  }
+}

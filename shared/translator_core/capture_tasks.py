@@ -444,7 +444,7 @@ class CaptureTasks(AudioTasks):
                         inference_turn=lambda:self.audio_adapter.translation_turn(gpu_lock, translation_cancel))
                 # The pinned acoustic calibration clip contains English.
                 # Other languages load the model now and start alignment with their input.
-                if binding['execution']['language']=='en' and asr_preparation and (not asr_preparation.get('reused') or
+                if binding['execution'].get('backend') is None and binding['execution']['language']=='en' and asr_preparation and (not asr_preparation.get('reused') or
                         preparation.get('translation',{}).get('elapsedSeconds',0)>=1):
                     preparation['warmup_requested'] = True
                     with self.lock:
@@ -504,7 +504,8 @@ class CaptureTasks(AudioTasks):
                         if control_wait:
                             raise CoreError('上一个采集控制尚未确认。', 'capture_state')
                         if action == 'resume':
-                            self._binding('speech.continuous_asr')
+                            if not binding.get('speech'):
+                                self._binding('speech.continuous_asr')
                             if self.capture_adapter.identity != value['helperIdentity']:
                                 raise CoreError('采集helper身份已改变，请保留旧录音并另建任务。', 'capture_owner')
                             ready_at = None

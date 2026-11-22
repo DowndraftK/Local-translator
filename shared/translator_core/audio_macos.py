@@ -15,6 +15,7 @@ from . import CoreError, Cancelled
 from .audio import MAX_SOURCE_BYTES
 from .resources import atomic_json, no_links, encoded, parse_binding, token
 from .resource_macos import environment, supported_speech_route, trusted_manifest, whisper_variant
+from .speech_presets import QWEN_BACKEND, QWEN_PACKAGES, QWEN_RUNTIME
 from .store import atomic_write, file_identity, safe_file
 
 
@@ -30,7 +31,8 @@ class MacAudio:
     def identity(self):
         names = ('audio.py', 'audio_tasks.py', 'audio_macos.py', 'audio_macos_helper.py',
                  'capture.py', 'capture_tasks.py', 'capture_macos.py', 'capture_speech.py',
-                 'audio_live_host.py', 'live_warmup.wav')
+                 'audio_live_host.py', 'live_warmup.wav', 'qwen_audio_helper.py', 'speech_presets.py',
+                 'speech_probe.py', 'qwen_runtime.py')
         return hashlib.sha256(encoded({n: hashlib.sha256(safe_file(Path(__file__).with_name(n))).hexdigest() for n in names})).hexdigest()
 
     @contextmanager
@@ -56,13 +58,22 @@ class MacAudio:
 
     def execute(self, stage, source, binding, cancel, receive, **fields):
         binding = parse_binding(binding); resources = binding['resources']
+        qwen = binding.get('speech', {}).get('backend') == QWEN_BACKEND
         for name, value in resources.items():
+            if qwen and name == 'speech.model':
+                continue  # parse_binding has checked the Qwen preset pin.
             if not trusted_manifest(name, value['manifest']['sha256']):
                 raise CoreError('音频执行资源不是已审核的固定组合。', 'audio_binding')
         runtime = Path(resources['speech.runtime']['root'])
         folder = self.root / uuid.uuid4().hex; folder.mkdir()
         request = dict(stage=stage, source=str(source), folder=str(folder), parent_pid=os.getpid(), **fields)
-        if stage != 'decode':
+        if qwen:
+            component = Path(resources['speech.qwen-runtime']['root'])
+            request.update(bridge=resources['speech.bridge']['root'], model_revision=binding['speech']['revision'],
+                config=dict(backend=QWEN_BACKEND, runtime=QWEN_RUNTIME, packages=QWEN_PACKAGES,
+                            source=str(Path(resources['speech.backend']['root'])/'Code/source'),
+                            site_packages=str(component/'site-packages'), model=resources['speech.model']['root']))
+        elif stage != 'decode':
             model_pin = resources['speech.model']['manifest']['sha256']
             if not supported_speech_route(model_pin, resources['speech.bridge']['manifest']['sha256']):
                 raise CoreError('语音模型与当前识别程序版本不匹配，请重新选择资源。', 'audio_binding')
@@ -73,13 +84,13 @@ class MacAudio:
                     device='mps', dtype='float32', max_context_tokens=128,
                     language=binding['execution']['language'], model_variant=whisper_variant(model_pin)))
         else: request['output'] = str(folder / 'audio.wav')
-        if stage == 'live':
+        if stage == 'live' and not qwen:
             request['config']['vad_preroll_seconds'] = .25
             if binding['execution']['language']=='en':
                 request['config']['live_warmup_file'] = str(Path(__file__).with_name('live_warmup.wav'))
             request['latency_profile'] = 't08-prepared-live-v1'
         atomic_json(folder / 'request.json', request)
-        if stage == 'live':
+        if stage == 'live' and not qwen:
             from .audio_live_host import LiveSpeechHost
             binding_key = hashlib.sha256(encoded(dict(resources=resources, config=request['config']))).hexdigest()
             if self.live_host and (self.live_host.binding_key != binding_key or
@@ -92,14 +103,16 @@ class MacAudio:
             return folder
         self.close()
         env = environment(folder); env['LOCAL_TRANSLATOR_RUNTIME_ROOT'] = str(runtime)
-        if stage != 'decode': env['LOCAL_TRANSLATOR_ASSETS_ROOT'] = resources['speech.assets']['root']
+        if stage != 'decode' and not qwen:
+            env['LOCAL_TRANSLATOR_ASSETS_ROOT'] = resources['speech.assets']['root']
         python = runtime / 'Python/bin/python3.12'
         helper = Path(__file__).with_name('audio_macos_helper.py')
         # Fixed resources are read-only, all new writes are confined to this execution.
         escaped = str(folder).replace('\\', '\\\\').replace('"', '\\"')
         profile = '(version 1)(allow default)(deny network*)(deny file-write*)(allow file-write* (subpath "' + escaped + '") (literal "/dev/null"))'
         from .mac_sandbox import sandbox_command
-        args = sandbox_command(profile, [python, '-I', '-B', helper, folder / 'request.json'], folder)
+        flags = ['-I', '-B', '-S'] if qwen else ['-I', '-B']
+        args = sandbox_command(profile, [python, *flags, helper, folder / 'request.json'], folder)
         self._run(args, folder, env, cancel, receive, failure_code='audio_decode' if stage == 'decode' else 'audio_process',
                   timeout=3000 if stage == 'live' else 600)
         return folder
